@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   Sidebar,
   SidebarContent,
@@ -10,11 +10,12 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from '@/components/ui/sidebar'
-import { LayoutDashboard, Bell, Settings, LogOut } from 'lucide-react'
+} from '@/components/ui/sidebar';
+import { LayoutDashboard, Bell, Settings, LogOut } from 'lucide-react';
+import { logout } from '@/lib/supabase/logout';
 
 export function DashboardSidebar() {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
   const menuItems = [
     {
@@ -32,13 +33,16 @@ export function DashboardSidebar() {
       href: '/settings',
       icon: Settings,
     },
-  ]
+  ];
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border">
-        <Link href="/dashboard" className="font-bold text-lg text-primary flex items-center gap-2">
-          <Bell className="w-5 h-5" />
+      <SidebarHeader className='border-b border-sidebar-border'>
+        <Link
+          href='/dashboard'
+          className='font-bold text-lg text-primary flex items-center gap-2'
+        >
+          <Bell className='w-5 h-5' />
           FollowUpTimer
         </Link>
       </SidebarHeader>
@@ -46,32 +50,35 @@ export function DashboardSidebar() {
       <SidebarContent>
         <SidebarMenu>
           {menuItems.map((item) => {
-            const Icon = item.icon
-            const isActive = pathname === item.href
+            const Icon = item.icon;
+            const isActive = pathname === item.href;
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   asChild
                   isActive={isActive}
-                  className="flex items-center gap-2"
+                  className='flex items-center gap-2'
                 >
                   <Link href={item.href}>
-                    <Icon className="w-4 h-4" />
+                    <Icon className='w-4 h-4' />
                     <span>{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            )
+            );
           })}
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className='border-t border-sidebar-border'>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <button className="flex items-center gap-2 w-full text-left">
-                <LogOut className="w-4 h-4" />
+              <button
+                onClick={() => logout('/')}
+                className='flex items-center gap-2 w-full text-left'
+              >
+                <LogOut className='w-4 h-4' />
                 <span>Logout</span>
               </button>
             </SidebarMenuButton>
@@ -79,5 +86,5 @@ export function DashboardSidebar() {
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
-  )
+  );
 }
