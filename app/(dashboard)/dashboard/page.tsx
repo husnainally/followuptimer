@@ -10,8 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Clock } from 'lucide-react';
+import { Plus, Clock, Bell, ClipboardList, ChevronRight, type LucideIcon } from 'lucide-react';
 import { RemindersTable } from '../reminders-table';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -70,82 +69,107 @@ export default function DashboardPage() {
     );
   }
 
+  const statCards = [
+    {
+      title: 'Upcoming Reminders',
+      value: upcomingCount,
+      description: 'Scheduled for this week',
+      icon: Clock,
+    },
+    {
+      title: 'Total Created',
+      value: reminders.length,
+      description: 'All time',
+      icon: ClipboardList,
+    },
+    {
+      title: 'Preferred Tone',
+      value: tonePreference || 'Not set',
+      description: 'Your affirmation style',
+      icon: Bell,
+    },
+  ];
+
   return (
     <div className='flex flex-col gap-6 p-6'>
       {/* Header Section */}
-      <div className='flex items-center justify-between'>
-        <div>
-          <h1 className='text-3xl font-bold'>Dashboard</h1>
-          <p className='text-muted-foreground mt-1'>
-            Manage your reminders and affirmations
-          </p>
-        </div>
-        <Link href='/reminders/create'>
-          <Button className='gap-2 bg-primary hover:bg-primary/90'>
-            <Plus className='w-4 h-4' />
-            New Reminder
-          </Button>
-        </Link>
-      </div>
+
 
       {/* Stats Cards */}
       <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-        <Card>
-          <CardHeader className='pb-3'>
-            <CardTitle className='text-sm font-medium'>
-              Upcoming Reminders
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className='flex items-end gap-2'>
-              <div className='text-3xl font-bold'>{upcomingCount}</div>
-              <Clock className='w-4 h-4 text-muted-foreground mb-1' />
-            </div>
-            <p className='text-xs text-muted-foreground mt-2'>
-              Scheduled for this week
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className='pb-3'>
-            <CardTitle className='text-sm font-medium'>Total Created</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className='text-3xl font-bold'>{reminders.length}</div>
-            <p className='text-xs text-muted-foreground mt-2'>All time</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className='pb-3'>
-            <CardTitle className='text-sm font-medium'>
-              Preferred Tone
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge className='bg-primary text-primary-foreground capitalize'>
-              {tonePreference || 'Not set'}
-            </Badge>
-            <p className='text-xs text-muted-foreground mt-2'>
-              Your affirmation style
-            </p>
-          </CardContent>
-        </Card>
+        {statCards.map((card) => (
+          <StatCard
+            key={card.title}
+            title={card.title}
+            description={card.description}
+            value={card.value}
+            icon={card.icon}
+          />
+        ))}
       </div>
 
       {/* Reminders Table Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Reminders</CardTitle>
-          <CardDescription>
-            All your upcoming and past reminders
-          </CardDescription>
+      <Card className='bg-[#FAFAFA]'>
+        <CardHeader className='flex items-center justify-between bg-[#FAFAFA]'>
+          <div>
+            <CardTitle>Your Reminders</CardTitle>
+            <CardDescription>
+              All your upcoming and past reminders
+            </CardDescription>
+          </div>
+          <div className='flex items-center justify-between'>
+
+            <Link href='/reminder/create'>
+              <Button className='gap-2 bg-primary hover:bg-primary/90'>
+                <Plus className='w-4 h-4' />
+                New Reminder
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           <RemindersTable reminders={reminders} />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+type StatCardProps = {
+  title: string;
+  description: string;
+  value: number | string;
+  icon: LucideIcon;
+};
+
+function StatCard({ title, description, value, icon: Icon }: StatCardProps) {
+  return (
+    <div className='relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-[#FAFAFA]'>
+      {/* Decorative orange spot, top right only */}
+      <div className="pointer-events-none absolute top-0 right-0 w-32 h-20 rounded-full bg-[rgba(213,184,255,1)] blur-2xl opacity-70 -translate-y-1/3 translate-x-1/3" />
+      <div className='relative flex flex-col gap-6 p-5'>
+        <div className='flex items-center justify-between'>
+          <div className='flex items-center gap-3'>
+            <span className='inline-flex size-11 items-center justify-center rounded-2xl bg-muted/40 text-primary'>
+              <Icon className='h-6 w-6' />
+            </span>
+            <div className='text-sm font-medium text-muted-foreground'>
+              {title}
+            </div>
+          </div>
+        
+        </div>
+        <div className='text-4xl font-semibold tracking-tight text-foreground'>
+          {typeof value === 'number' ? (
+            value
+          ) : (
+            <span className='text-2xl font-semibold capitalize text-foreground'>
+              {value}
+            </span>
+          )}
+        </div>
+       
+      </div>
     </div>
   );
 }

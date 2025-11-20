@@ -75,7 +75,7 @@ export const reminderSchema = z.object({
     .string()
     .min(1, 'Message is required')
     .max(500, 'Message too long'),
-  remind_at: z.string().min(1, 'Date and time are required'),
+  remind_at: z.date().refine((date) => date > new Date(), "Reminder time must be in the future"),
   tone: z.enum(['motivational', 'professional', 'playful'], {
     message: 'Please select a tone',
   }),
