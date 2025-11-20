@@ -4,7 +4,7 @@ import { WaitlistForm } from '@/components/waitlist-form';
 
 const Waitlist1 = () => {
   return (
-    <section className='flex flex-col min-h-screen w-screen items-center justify-center overflow-hidden py-32 px-4'>
+    <section className='flex flex-col min-h-screen w-screen items-center justify-center overflow-hidden '>
       <h2 className='relative z-20 py-2 text-center font-sans text-5xl font-semibold tracking-tighter md:py-10 lg:text-8xl'>
         Join the Waitlist
       </h2>

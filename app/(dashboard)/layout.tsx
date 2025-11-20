@@ -11,13 +11,13 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <SidebarProvider>
+    <SidebarProvider className="bg-white min-h-svh ">
       <DashboardSidebar />
-      <SidebarInset>
+      <SidebarInset className="p-4 md:p-0 flex flex-col gap-4 bg-white">
         <DashboardHeader />
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
+        <div className=" mx-4  min-h-[calc(100vh-4rem)] flex-col overflow-hidden">
+          <main className="flex-1 overflow-auto ">{children}</main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

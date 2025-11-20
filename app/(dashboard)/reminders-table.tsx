@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { BellRing, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,17 +18,24 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 
-interface Reminder {
+export interface Reminder {
   id: string
   message: string
   remind_at: Date
   tone: string
   status: string
+  notification_method?: string
   created_at: Date
 }
 
-export function RemindersTable({ reminders }: { reminders: Reminder[] }) {
+type RemindersTableProps = {
+  reminders: Reminder[]
+  onReminderClick?: (reminder: Reminder) => void
+}
+
+export function RemindersTable({ reminders, onReminderClick }: RemindersTableProps) {
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
@@ -54,8 +61,8 @@ export function RemindersTable({ reminders }: { reminders: Reminder[] }) {
   return (
     <div className="rounded-lg border border-border overflow-hidden">
       <Table>
-        <TableHeader className="bg-muted/50">
-          <TableRow>
+        <TableHeader className="bg-gray-200 hover:bg-gray-200 ">
+          <TableRow className='bg-gray-200 hover:bg-gray-200'>
             <TableHead>Message</TableHead>
             <TableHead>Scheduled</TableHead>
             <TableHead>Tone</TableHead>
@@ -66,15 +73,28 @@ export function RemindersTable({ reminders }: { reminders: Reminder[] }) {
         <TableBody>
           {reminders.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center py-8">
-                <p className="text-muted-foreground">
-                  No reminders yet. Create one to get started!
-                </p>
+              <TableCell colSpan={5} className="p-0 bg-white hover:bg-white">
+                <div className="flex flex-col items-center justify-center gap-3 text-center py-12 hover:bg-white">
+                  <div className="inline-flex size-16 items-center justify-center rounded-full text-primary">
+                    <BellRing  className="h-15 w-16" />
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold text-foreground">No Reminders Yet</p>
+                    <p className="text-sm text-muted-foreground">Create your first reminder to see it here.</p>
+                  </div>
+                </div>
               </TableCell>
             </TableRow>
           ) : (
             reminders.map((reminder) => (
-              <TableRow key={reminder.id} className="hover:bg-muted/50">
+              <TableRow
+                key={reminder.id}
+                className={cn(
+                  'hover:bg-muted/50',
+                  onReminderClick && 'cursor-pointer'
+                )}
+                onClick={() => onReminderClick?.(reminder)}
+              >
                 <TableCell className="font-medium">{reminder.message}</TableCell>
                 <TableCell className="text-sm">
                   {formatDate(reminder.remind_at)}
@@ -95,13 +115,17 @@ export function RemindersTable({ reminders }: { reminders: Reminder[] }) {
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <MoreHorizontal className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem asChild>
-                        <Link href={`/reminders/${reminder.id}`} className="cursor-pointer">
+                        <Link href={`/reminder/${reminder.id}`} className="cursor-pointer">
                           <Pencil className="w-4 h-4 mr-2" />
                           Edit
                         </Link>
