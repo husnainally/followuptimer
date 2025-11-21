@@ -70,31 +70,40 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    // Schedule QStash job (only if QSTASH_TOKEN is configured and not localhost)
+    // Schedule QStash job (if QSTASH_TOKEN is configured)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-    const isProduction =
-      appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1');
+    const isProduction = process.env.NODE_ENV === 'production';
 
-    if (process.env.QSTASH_TOKEN && isProduction) {
+    if (process.env.QSTASH_TOKEN && appUrl) {
       try {
+        if (!isProduction) {
+          console.log('[QStash] Scheduling reminder:', {
+            reminderId: reminder.id,
+            remindAt: reminder.remind_at,
+            callbackUrl: `${appUrl}/api/reminders/send`,
+          });
+        }
+
         const qstashMessageId = await scheduleReminder({
           reminderId: reminder.id,
           remindAt: new Date(reminder.remind_at),
           callbackUrl: `${appUrl}/api/reminders/send`,
         });
 
+        if (!isProduction) {
+          console.log('[QStash] Message scheduled:', qstashMessageId);
+        }
+
         await supabase
           .from('reminders')
           .update({ qstash_message_id: qstashMessageId })
           .eq('id', reminder.id);
       } catch (qstashError) {
-        console.error('QStash scheduling failed (non-fatal):', qstashError);
+        console.error('[QStash] Scheduling failed (non-fatal):', qstashError);
         // Continue anyway - reminder is created, just not scheduled
       }
     } else {
-      console.log(
-        'QStash scheduling skipped (development mode or missing token)'
-      );
+      console.log('[QStash] Scheduling skipped - missing token or app URL');
     }
 
     return NextResponse.json({ reminder }, { status: 201 });

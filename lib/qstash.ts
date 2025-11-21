@@ -2,6 +2,7 @@ import { Client } from '@upstash/qstash';
 
 const qstash = new Client({
   token: process.env.QSTASH_TOKEN!,
+  baseUrl: process.env.QSTASH_URL || 'https://qstash.upstash.io',
 });
 
 interface ScheduleReminderOptions {
