@@ -1,15 +1,25 @@
-import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
 import { NextResponse } from 'next/server';
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
 import { sendReminderEmail } from '@/lib/email';
 import { generateAffirmation } from '@/lib/affirmations';
 import { sendPushNotification } from '@/lib/push-notification';
 import { createInAppNotification } from '@/lib/in-app-notification';
+import { logError, logInfo } from '@/lib/logger';
 
 async function handler(request: Request) {
   try {
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (!isProduction) {
+      console.log('[Webhook] Received request at:', new Date().toISOString());
+    }
+
     const body = await request.json();
     const { reminderId } = body;
+
+    if (!isProduction) {
+      console.log('[Webhook] Processing reminder:', reminderId);
+    }
 
     if (!reminderId) {
       return NextResponse.json(
@@ -18,7 +28,8 @@ async function handler(request: Request) {
       );
     }
 
-    const supabase = await createClient();
+    // Use service client to bypass RLS since webhooks don't have user session
+    const supabase = createServiceClient();
 
     // Fetch reminder and user profile
     const { data: reminder, error: reminderError } = await supabase
@@ -88,11 +99,12 @@ async function handler(request: Request) {
           errorMessage = `Unknown notification method: ${reminder.notification_method}`;
       }
     } catch (notificationError: unknown) {
-      errorMessage =
-        notificationError instanceof Error
-          ? notificationError.message
-          : 'Notification send failed';
-      console.error('Notification send failed:', notificationError);
+      const errorInfo = logError(notificationError, {
+        reminderId: reminder.id,
+        userId: reminder.user_id,
+        notificationMethod: reminder.notification_method,
+      });
+      errorMessage = errorInfo.message;
     }
 
     // Update reminder status
@@ -100,6 +112,13 @@ async function handler(request: Request) {
       .from('reminders')
       .update({ status: success ? 'sent' : 'failed' })
       .eq('id', reminderId);
+
+    if (!isProduction) {
+      console.log(
+        '[Webhook] Reminder status updated:',
+        success ? 'sent' : 'failed'
+      );
+    }
 
     // Log the send attempt (use 'affirmation' not 'affirmation_text')
     await supabase.from('sent_logs').insert({
@@ -112,20 +131,30 @@ async function handler(request: Request) {
       error_message: errorMessage,
     });
 
+    if (!isProduction || !success) {
+      // Always log errors, only log success in development
+      console.log('[Webhook] Notification completed:', {
+        success,
+        method: reminder.notification_method,
+        error: errorMessage,
+      });
+    }
+
     return NextResponse.json({ success });
   } catch (error: unknown) {
-    console.error('Webhook error:', error);
-    const message =
-      error instanceof Error ? error.message : 'Webhook processing failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const errorInfo = logError(error, {
+      endpoint: '/api/reminders/send',
+      method: 'POST',
+    });
+    return NextResponse.json(
+      { error: errorInfo.message },
+      { status: 500 }
+    );
   }
 }
 
-// Disable signature verification for testing
-// TODO: Re-enable after QStash integration is working
-export const POST = handler;
-
-// Production with signature verification:
-// export const POST = process.env.QSTASH_CURRENT_SIGNING_KEY
-//   ? verifySignatureAppRouter(handler)
-//   : handler;
+// Enable signature verification in production (when QSTASH_CURRENT_SIGNING_KEY is set)
+// In development with local QStash, signature verification still works
+export const POST = process.env.QSTASH_CURRENT_SIGNING_KEY
+  ? verifySignatureAppRouter(handler)
+  : handler;
