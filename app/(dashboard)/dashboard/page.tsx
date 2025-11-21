@@ -10,7 +10,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Clock, Bell, ClipboardList, ChevronRight, type LucideIcon } from 'lucide-react';
+import {
+  Plus,
+  Clock,
+  Bell,
+  ClipboardList,
+  ChevronRight,
+  type LucideIcon,
+} from 'lucide-react';
 import { RemindersTable } from '../reminders-table';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -94,7 +101,6 @@ export default function DashboardPage() {
     <div className='flex flex-col gap-6 p-6'>
       {/* Header Section */}
 
-
       {/* Stats Cards */}
       <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
         {statCards.map((card) => (
@@ -118,7 +124,6 @@ export default function DashboardPage() {
             </CardDescription>
           </div>
           <div className='flex items-center justify-between'>
-
             <Link href='/reminder/create'>
               <Button className='gap-2 bg-primary hover:bg-primary/90'>
                 <Plus className='w-4 h-4' />
@@ -128,7 +133,7 @@ export default function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <RemindersTable reminders={reminders} />
+          <RemindersTable reminders={reminders} onReminderDeleted={fetchData} />
         </CardContent>
       </Card>
     </div>
@@ -146,7 +151,7 @@ function StatCard({ title, description, value, icon: Icon }: StatCardProps) {
   return (
     <div className='relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-[#FAFAFA]'>
       {/* Decorative orange spot, top right only */}
-      <div className="pointer-events-none absolute top-0 right-0 w-32 h-20 rounded-full bg-[rgba(213,184,255,1)] blur-2xl opacity-70 -translate-y-1/3 translate-x-1/3" />
+      <div className='pointer-events-none absolute top-0 right-0 w-32 h-20 rounded-full bg-[rgba(213,184,255,1)] blur-2xl opacity-70 -translate-y-1/3 translate-x-1/3' />
       <div className='relative flex flex-col gap-6 p-5'>
         <div className='flex items-center justify-between'>
           <div className='flex items-center gap-3'>
@@ -157,7 +162,6 @@ function StatCard({ title, description, value, icon: Icon }: StatCardProps) {
               {title}
             </div>
           </div>
-        
         </div>
         <div className='text-4xl font-semibold tracking-tight text-foreground'>
           {typeof value === 'number' ? (
@@ -168,7 +172,6 @@ function StatCard({ title, description, value, icon: Icon }: StatCardProps) {
             </span>
           )}
         </div>
-       
       </div>
     </div>
   );
