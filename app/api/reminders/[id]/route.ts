@@ -34,8 +34,11 @@ export async function GET(
     }
 
     return NextResponse.json({ reminder });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Failed to fetch reminder:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to fetch reminder';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -75,24 +78,39 @@ export async function PATCH(
 
     if (error) throw error;
 
-    // Update QStash job if remind_at changed
-    if (remind_at !== undefined && reminder.qstash_message_id) {
-      await cancelScheduledReminder(reminder.qstash_message_id);
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const newQstashMessageId = await scheduleReminder({
-        reminderId: reminder.id,
-        remindAt: new Date(reminder.remind_at),
-        callbackUrl: `${appUrl}/api/reminders/send`,
-      });
-      await supabase
-        .from('reminders')
-        .update({ qstash_message_id: newQstashMessageId })
-        .eq('id', reminder.id);
+    // Update QStash job if remind_at changed (only in production)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const isProduction =
+      appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1');
+
+    if (
+      remind_at !== undefined &&
+      reminder.qstash_message_id &&
+      process.env.QSTASH_TOKEN &&
+      isProduction
+    ) {
+      try {
+        await cancelScheduledReminder(reminder.qstash_message_id);
+        const newQstashMessageId = await scheduleReminder({
+          reminderId: reminder.id,
+          remindAt: new Date(reminder.remind_at),
+          callbackUrl: `${appUrl}/api/reminders/send`,
+        });
+        await supabase
+          .from('reminders')
+          .update({ qstash_message_id: newQstashMessageId })
+          .eq('id', reminder.id);
+      } catch (qstashError) {
+        console.error('QStash rescheduling failed (non-fatal):', qstashError);
+      }
     }
 
     return NextResponse.json({ reminder });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Failed to update reminder:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to update reminder';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -119,9 +137,13 @@ export async function DELETE(
       .eq('user_id', user.id)
       .single();
 
-    // Cancel QStash job if exists
-    if (reminder?.qstash_message_id) {
-      await cancelScheduledReminder(reminder.qstash_message_id);
+    // Cancel QStash job if exists (only in production)
+    if (reminder?.qstash_message_id && process.env.QSTASH_TOKEN) {
+      try {
+        await cancelScheduledReminder(reminder.qstash_message_id);
+      } catch (qstashError) {
+        console.error('QStash cancellation failed (non-fatal):', qstashError);
+      }
     }
 
     const { error } = await supabase
@@ -133,7 +155,10 @@ export async function DELETE(
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Failed to delete reminder:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to delete reminder';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

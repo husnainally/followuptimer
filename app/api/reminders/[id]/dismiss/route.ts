@@ -35,13 +35,20 @@ export async function POST(
       );
     }
 
-    // Cancel QStash job if exists
-    if (reminder.qstash_message_id) {
-      await cancelScheduledReminder(reminder.qstash_message_id);
+    // Cancel QStash job if exists (only in production)
+    if (reminder.qstash_message_id && process.env.QSTASH_TOKEN) {
+      try {
+        await cancelScheduledReminder(reminder.qstash_message_id);
+      } catch (qstashError) {
+        console.error('QStash cancellation failed (non-fatal):', qstashError);
+      }
     }
 
     return NextResponse.json({ reminder });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Failed to dismiss reminder:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to dismiss reminder';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
