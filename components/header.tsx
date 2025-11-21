@@ -1,15 +1,48 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { Search } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationBell } from '@/components/notification-bell';
+import { createClient } from '@/lib/supabase/client';
+
+interface UserProfile {
+  full_name: string | null;
+  email: string | null;
+}
 
 export function DashboardHeader() {
   const pathname = usePathname();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', user.id)
+            .single();
+
+          setProfile(data || { full_name: null, email: user.email });
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchProfile();
+  }, []);
 
   const { title, description } = useMemo(() => {
     if (!pathname)
@@ -65,14 +98,34 @@ export function DashboardHeader() {
           <NotificationBell />
 
           <div className='flex items-center gap-3'>
-            <div className='text-right leading-tight'>
-              <p className='text-sm font-semibold'>User Name</p>
-              <p className='text-xs text-muted-foreground'>Admin</p>
-            </div>
-            <Avatar className='size-10'>
-              <AvatarImage src='/avatar-placeholder.png' alt='User avatar' />
-              <AvatarFallback>UN</AvatarFallback>
-            </Avatar>
+            {!loading && profile && (
+              <>
+                <div className='text-right leading-tight'>
+                  <p className='text-sm font-semibold'>
+                    {profile.full_name || 'User'}
+                  </p>
+                  <p className='text-xs text-muted-foreground'>
+                    {profile.email || ''}
+                  </p>
+                </div>
+                <Avatar className='size-10'>
+                  <AvatarImage
+                    src={'/avatar-placeholder.png'}
+                    alt='User avatar'
+                  />
+                  <AvatarFallback>
+                    {profile.full_name
+                      ? profile.full_name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                          .toUpperCase()
+                          .slice(0, 2)
+                      : 'U'}
+                  </AvatarFallback>
+                </Avatar>
+              </>
+            )}
           </div>
         </div>
       </div>
