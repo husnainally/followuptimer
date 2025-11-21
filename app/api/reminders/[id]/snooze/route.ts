@@ -56,25 +56,39 @@ export async function POST(
 
     if (updateError) throw updateError;
 
-    // Reschedule QStash job
-    if (reminder.qstash_message_id) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const newQstashMessageId = await rescheduleReminder(
-        reminder.qstash_message_id,
-        {
-          reminderId: updatedReminder.id,
-          remindAt: newTime,
-          callbackUrl: `${appUrl}/api/reminders/send`,
-        }
-      );
-      await supabase
-        .from('reminders')
-        .update({ qstash_message_id: newQstashMessageId })
-        .eq('id', updatedReminder.id);
+    // Reschedule QStash job (only in production)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const isProduction =
+      appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1');
+
+    if (
+      reminder.qstash_message_id &&
+      process.env.QSTASH_TOKEN &&
+      isProduction
+    ) {
+      try {
+        const newQstashMessageId = await rescheduleReminder(
+          reminder.qstash_message_id,
+          {
+            reminderId: updatedReminder.id,
+            remindAt: newTime,
+            callbackUrl: `${appUrl}/api/reminders/send`,
+          }
+        );
+        await supabase
+          .from('reminders')
+          .update({ qstash_message_id: newQstashMessageId })
+          .eq('id', updatedReminder.id);
+      } catch (qstashError) {
+        console.error('QStash rescheduling failed (non-fatal):', qstashError);
+      }
     }
 
     return NextResponse.json({ reminder: updatedReminder });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Failed to snooze reminder:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to snooze reminder';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

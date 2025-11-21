@@ -19,11 +19,17 @@ export async function GET(request: Request) {
       .eq('user_id', user.id)
       .order('remind_at', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Failed to fetch reminders:', error);
+      throw error;
+    }
 
     return NextResponse.json({ reminders });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Failed to fetch reminders:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to fetch reminders';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -64,21 +70,38 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    // Schedule QStash job
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const qstashMessageId = await scheduleReminder({
-      reminderId: reminder.id,
-      remindAt: new Date(reminder.remind_at),
-      callbackUrl: `${appUrl}/api/reminders/send`,
-    });
+    // Schedule QStash job (only if QSTASH_TOKEN is configured and not localhost)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const isProduction =
+      appUrl && !appUrl.includes('localhost') && !appUrl.includes('127.0.0.1');
 
-    await supabase
-      .from('reminders')
-      .update({ qstash_message_id: qstashMessageId })
-      .eq('id', reminder.id);
+    if (process.env.QSTASH_TOKEN && isProduction) {
+      try {
+        const qstashMessageId = await scheduleReminder({
+          reminderId: reminder.id,
+          remindAt: new Date(reminder.remind_at),
+          callbackUrl: `${appUrl}/api/reminders/send`,
+        });
+
+        await supabase
+          .from('reminders')
+          .update({ qstash_message_id: qstashMessageId })
+          .eq('id', reminder.id);
+      } catch (qstashError) {
+        console.error('QStash scheduling failed (non-fatal):', qstashError);
+        // Continue anyway - reminder is created, just not scheduled
+      }
+    } else {
+      console.log(
+        'QStash scheduling skipped (development mode or missing token)'
+      );
+    }
 
     return NextResponse.json({ reminder }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Failed to create reminder:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to create reminder';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
