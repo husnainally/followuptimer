@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 // DELETE a specific notification (sent log)
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -18,7 +18,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Verify the sent log belongs to the user before deleting
     const { data: sentLog, error: fetchError } = await supabase

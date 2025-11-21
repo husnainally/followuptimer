@@ -71,8 +71,8 @@ export function NotificationsSetup() {
         {pushEnabled && (
           <div className='flex gap-3 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm text-foreground'>
             <AlertCircle className='h-5 w-5 text-primary' />
-            You'll be prompted by your browser to allow notifications. Choose
-            “Allow” so we can nudge you at the right moment.
+            You&apos;ll be prompted by your browser to allow notifications.
+            Choose “Allow” so we can nudge you at the right moment.
           </div>
         )}
 
