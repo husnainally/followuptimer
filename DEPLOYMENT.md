@@ -217,13 +217,13 @@ vercel logs
 
 ## Local Development vs Production
 
-| Feature | Local Dev | Production |
-|---------|-----------|------------|
-| QStash | Local CLI (`127.0.0.1:8080`) | Upstash Cloud |
-| Signature Verification | Enabled | Enabled |
-| Logging | Verbose | Errors only |
-| Service Role | Required | Required |
-| App URL | `localhost:3000` | Vercel URL |
+| Feature                | Local Dev                    | Production    |
+| ---------------------- | ---------------------------- | ------------- |
+| QStash                 | Local CLI (`127.0.0.1:8080`) | Upstash Cloud |
+| Signature Verification | Enabled                      | Enabled       |
+| Logging                | Verbose                      | Errors only   |
+| Service Role           | Required                     | Required      |
+| App URL                | `localhost:3000`             | Vercel URL    |
 
 ---
 
