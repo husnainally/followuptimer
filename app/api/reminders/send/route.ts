@@ -146,10 +146,7 @@ async function handler(request: Request) {
       endpoint: '/api/reminders/send',
       method: 'POST',
     });
-    return NextResponse.json(
-      { error: errorInfo.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: errorInfo.message }, { status: 500 });
   }
 }
 
