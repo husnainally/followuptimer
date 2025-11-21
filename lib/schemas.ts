@@ -61,10 +61,10 @@ export type ToneFormData = z.infer<typeof toneSchema>;
 
 // Notifications Schema
 export const notificationsSchema = z.object({
-  pushEnabled: z.boolean().default(false),
-  emailNotifications: z.boolean().default(true),
-  pushNotifications: z.boolean().default(false),
-  inAppNotifications: z.boolean().default(false),
+  pushEnabled: z.boolean(),
+  emailNotifications: z.boolean(),
+  pushNotifications: z.boolean(),
+  inAppNotifications: z.boolean(),
 });
 
 export type NotificationsFormData = z.infer<typeof notificationsSchema>;
@@ -75,7 +75,9 @@ export const reminderSchema = z.object({
     .string()
     .min(1, 'Message is required')
     .max(500, 'Message too long'),
-  remind_at: z.date().refine((date) => date > new Date(), "Reminder time must be in the future"),
+  remind_at: z
+    .date()
+    .refine((date) => date > new Date(), 'Reminder time must be in the future'),
   tone: z.enum(['motivational', 'professional', 'playful'], {
     message: 'Please select a tone',
   }),
