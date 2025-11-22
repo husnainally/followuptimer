@@ -1,22 +1,23 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Form } from '@/components/ui/form';
-import { ControlledSwitch } from '@/components/controlled-switch';
-import { Check } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import { toast } from 'sonner';
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Form } from "@/components/ui/form";
+import { ControlledSwitch } from "@/components/controlled-switch";
+import { Check, AlertCircle } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { usePushSubscription } from "@/hooks/use-push-subscription";
 
 const notificationSettingsSchema = z.object({
   emailNotifications: z.boolean().default(true),
@@ -28,6 +29,7 @@ const notificationSettingsSchema = z.object({
 export function NotificationSettings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  const pushSubscription = usePushSubscription();
 
   const form = useForm({
     resolver: zodResolver(notificationSettingsSchema),
@@ -52,9 +54,9 @@ export function NotificationSettings() {
 
       if (user) {
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('email_notifications, push_enabled, reminder_before_minutes')
-          .eq('id', user.id)
+          .from("profiles")
+          .select("email_notifications, push_enabled, reminder_before_minutes")
+          .eq("id", user.id)
           .single();
 
         if (profile) {
@@ -67,8 +69,8 @@ export function NotificationSettings() {
         }
       }
     } catch (error) {
-      console.error('Failed to load notification settings:', error);
-      toast.error('Failed to load settings');
+      console.error("Failed to load notification settings:", error);
+      toast.error("Failed to load settings");
     } finally {
       setLoading(false);
     }
@@ -82,76 +84,128 @@ export function NotificationSettings() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        toast.error('Not authenticated');
+        toast.error("Not authenticated");
         return;
       }
 
       const { error } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update({
           email_notifications: data.emailNotifications,
           push_enabled: data.pushNotifications,
         })
-        .eq('id', user.id);
+        .eq("id", user.id);
 
       if (error) throw error;
 
       setSaveSuccess(true);
-      toast.success('Notification settings updated');
+      toast.success("Notification settings updated");
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      console.error('Failed to save notification settings:', error);
-      toast.error('Failed to save settings');
+      console.error("Failed to save notification settings:", error);
+      toast.error("Failed to save settings");
     }
   };
 
   if (loading) {
     return (
       <Card>
-        <CardContent className='pt-6'>
-          <div className='text-center text-muted-foreground'>Loading...</div>
+        <CardContent className="pt-6">
+          <div className="text-center text-muted-foreground">Loading...</div>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className=''>
+    <Card className="">
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <ControlledSwitch
               control={form.control}
-              name='emailNotifications'
-              label='Email Notifications'
-              description='Receive affirmation reminders via email'
+              name="emailNotifications"
+              label="Email Notifications"
+              description="Receive affirmation reminders via email"
+            />
+            <div className="space-y-2">
+              <ControlledSwitch
+                control={form.control}
+                name="pushNotifications"
+                label="Push Notifications"
+                description="Receive push notifications on your devices"
+              />
+              {pushSubscription.isSupported && (
+                <div className="ml-6 space-y-2">
+                  {!pushSubscription.isSubscribed &&
+                    pushSubscription.permission !== "denied" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={pushSubscription.subscribe}
+                        disabled={pushSubscription.isLoading}
+                      >
+                        {pushSubscription.isLoading
+                          ? "Enabling..."
+                          : "Enable Browser Push Notifications"}
+                      </Button>
+                    )}
+                  {pushSubscription.isSubscribed && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={pushSubscription.unsubscribe}
+                      disabled={pushSubscription.isLoading}
+                    >
+                      {pushSubscription.isLoading
+                        ? "Disabling..."
+                        : "Disable Browser Push Notifications"}
+                    </Button>
+                  )}
+                  {pushSubscription.permission === "denied" && (
+                    <div className="flex items-center gap-2 text-sm text-destructive">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>
+                        Push notifications are blocked. Please enable them in
+                        your browser settings.
+                      </span>
+                    </div>
+                  )}
+                  {pushSubscription.isSubscribed && (
+                    <p className="text-xs text-muted-foreground">
+                      ✓ Push notifications are enabled
+                    </p>
+                  )}
+                </div>
+              )}
+              {!pushSubscription.isSupported && (
+                <p className="ml-6 text-xs text-muted-foreground">
+                  Push notifications are not supported in this browser
+                </p>
+              )}
+            </div>
+            <ControlledSwitch
+              control={form.control}
+              name="reminderAlerts"
+              label="Reminder Alerts"
+              description="Get alerted when a reminder is due"
             />
             <ControlledSwitch
               control={form.control}
-              name='pushNotifications'
-              label='Push Notifications'
-              description='Receive push notifications on your devices'
+              name="weeklyDigest"
+              label="Weekly Digest"
+              description="Receive a weekly summary of your activity"
             />
-            <ControlledSwitch
-              control={form.control}
-              name='reminderAlerts'
-              label='Reminder Alerts'
-              description='Get alerted when a reminder is due'
-            />
-            <ControlledSwitch
-              control={form.control}
-              name='weeklyDigest'
-              label='Weekly Digest'
-              description='Receive a weekly summary of your activity'
-            />
-            <div className='flex justify-end pt-4'>
+            <div className="flex justify-end pt-4">
               {saveSuccess && (
-                <div className='flex items-center gap-2 text-sm text-primary mr-4'>
-                  <Check className='w-4 h-4' />
+                <div className="flex items-center gap-2 text-sm text-primary mr-4">
+                  <Check className="w-4 h-4" />
                   <span>Saved successfully</span>
                 </div>
               )}
-              <Button type='submit' className='bg-primary hover:bg-primary/90'>
+              <Button type="submit" className="bg-primary hover:bg-primary/90">
                 Save Preferences
               </Button>
             </div>
