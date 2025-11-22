@@ -1,4 +1,4 @@
-# ⏰ FollowUpTimer
+# ⏰ FollowUpTimer 
 
 A smart reminder application with motivational affirmations, built with Next.js, Supabase, Resend, and QStash. 
 
