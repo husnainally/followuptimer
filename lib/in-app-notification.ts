@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 interface CreateInAppNotificationOptions {
   userId: string;
@@ -6,6 +7,7 @@ interface CreateInAppNotificationOptions {
   title: string;
   message: string;
   affirmation: string;
+  useServiceClient?: boolean;
 }
 
 export async function createInAppNotification({
@@ -14,12 +16,16 @@ export async function createInAppNotification({
   title,
   message,
   affirmation,
+  useServiceClient = false,
 }: CreateInAppNotificationOptions) {
   try {
-    const supabase = await createClient();
+    // Use service client in API routes (webhooks) or regular client in server components
+    const supabase = useServiceClient
+      ? createServiceClient()
+      : await createClient();
 
     const { data, error } = await supabase
-      .from('in_app_notifications')
+      .from("in_app_notifications")
       .insert({
         user_id: userId,
         reminder_id: reminderId,
@@ -38,10 +44,10 @@ export async function createInAppNotification({
       notification: data,
     };
   } catch (error) {
-    console.error('Failed to create in-app notification:', error);
+    console.error("Failed to create in-app notification:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }
