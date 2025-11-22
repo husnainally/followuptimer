@@ -18,7 +18,7 @@ A Next.js reminder app with affirmations, powered by Supabase, Resend, and QStas
 ### 1. Clone and Install Dependencies
 
 ```bash
-git clone <your-repo-url>
+git clone [<your-repo-url>](https://github.com/husnainally/followuptimer)
 cd followuptimer
 npm install
 ```
