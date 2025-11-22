@@ -71,7 +71,17 @@ export async function POST(request: Request) {
     if (error) throw error;
 
     // Schedule QStash job (if QSTASH_TOKEN is configured)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    // In local development, use localhost URL; otherwise use configured app URL
+    const isLocalDev = process.env.NODE_ENV === "development";
+    const isLocalQStash =
+      process.env.QSTASH_URL?.includes("127.0.0.1") ||
+      process.env.QSTASH_URL?.includes("localhost");
+
+    const appUrl =
+      isLocalDev && isLocalQStash
+        ? process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+        : process.env.NEXT_PUBLIC_APP_URL;
+
     const remindAtDate = new Date(reminder.remind_at);
     const now = new Date();
 
