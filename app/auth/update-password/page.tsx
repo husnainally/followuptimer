@@ -70,9 +70,13 @@ export default function UpdatePasswordPage() {
         }
 
         setIsAuthenticated(true);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error checking session:", err);
-        toast.error("Unable to verify session. Please try again.");
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Unable to verify session. Please try again.";
+        toast.error(errorMessage);
         router.push("/forgot-password");
       } finally {
         setIsChecking(false);
@@ -106,16 +110,44 @@ export default function UpdatePasswordPage() {
 
       if (error) throw error;
 
-      toast.success("Password updated successfully! Redirecting...", {
-        id: toastId,
-      });
+      // Check if user is admin to determine redirect path
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
 
-      // Small delay to show success message
-      setTimeout(() => {
-        router.push("/login");
-      }, 1500);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update password", { id: toastId });
+      if (currentUser) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_admin")
+          .eq("id", currentUser.id)
+          .single();
+
+        const redirectPath = profile?.is_admin
+          ? "/admin/waitlist"
+          : "/dashboard";
+
+        toast.success("Password updated successfully! Redirecting...", {
+          id: toastId,
+        });
+
+        // Small delay to show success message
+        setTimeout(() => {
+          router.push(redirectPath);
+        }, 1500);
+      } else {
+        toast.success("Password updated successfully! Redirecting...", {
+          id: toastId,
+        });
+
+        // Small delay to show success message
+        setTimeout(() => {
+          router.push("/login");
+        }, 1500);
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update password";
+      toast.error(errorMessage, { id: toastId });
       setIsLoading(false);
     }
   }
