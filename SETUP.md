@@ -47,6 +47,7 @@ In your Supabase project dashboard:
 3. Copy the contents of `supabase/migrations/20241119000000_initial_schema.sql`
 4. Run the query
 
+
 This will create:
 - `profiles` table (user preferences)
 - `reminders` table (scheduled reminders)
