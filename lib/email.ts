@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -22,8 +22,9 @@ export async function sendReminderEmail({
       throw new Error("Email service not configured");
     }
 
-    const from =
-      process.env.RESEND_FROM || 'FollowUpTimer <no-reply@followuptimer.app>';
+    // Use RESEND_FROM if set, otherwise fall back to Resend's test domain
+    // Note: Test domain only works for verified test emails in Resend dashboard
+    const from = process.env.RESEND_FROM || "onboarding@resend.dev";
 
     console.log("[Email] Sending reminder email:", {
       to,
@@ -68,6 +69,6 @@ export async function sendReminderEmail({
 function escapeHtml(str: string) {
   return str.replace(
     /[&<>"]+/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!)
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!)
   );
 }

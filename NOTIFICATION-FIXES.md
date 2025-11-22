@@ -73,6 +73,45 @@ fetch('/api/notifications/test', {
    - Browser must have granted notification permission
    - Subscription must exist in `push_subscriptions` table
 
+## Current Issues & Solutions
+
+### Issue 1: Email - Domain Not Verified
+
+**Error:** `"The followuptimer.app domain is not verified"`
+
+**Root Cause:** Resend doesn't allow free public domains like `followuptimer.vercel.app`. You need to use a **custom domain you own**.
+
+**Solution:**
+1. **Buy or use an existing domain** (e.g., `followuptimer.com`)
+2. **Add domain in Resend:**
+   - Go to [Resend Domains](https://resend.com/domains)
+   - Click "Add Domain"
+   - Enter your domain (not `.vercel.app`)
+   - Add DNS records provided by Resend
+   - Wait for verification (5-10 minutes)
+3. **Update Vercel environment variable:**
+   - Go to Vercel Dashboard → Settings → Environment Variables
+   - Set `RESEND_FROM` to: `FollowUpTimer <noreply@yourdomain.com>`
+   - Make sure it's set for **Production** environment
+   - Redeploy application
+
+📖 **Detailed Guide:** See `docs/resend-domain-setup.md`
+
+### Issue 2: Push - No Subscriptions Found
+
+**Error:** `"No push subscriptions found. Please enable push notifications in settings."`
+
+**Root Cause:** User hasn't enabled push notifications in the app settings yet.
+
+**Solution:**
+1. **Login to your app:** https://followuptimer.vercel.app/login
+2. **Go to Settings → Notifications**
+3. **Toggle "Browser Push Notifications" to ON**
+4. **Grant permission** when browser prompts
+5. **Test again** using `/api/notifications/test`
+
+📖 **Detailed Guide:** See `docs/push-notification-setup.md`
+
 ## Common Issues and Solutions
 
 ### Email Not Working
@@ -81,14 +120,15 @@ fetch('/api/notifications/test', {
 
 **Check:**
 1. ✅ `RESEND_API_KEY` is set in Vercel
-2. ✅ `RESEND_FROM` domain is verified in Resend dashboard
+2. ✅ `RESEND_FROM` domain is verified in Resend dashboard (must be your own domain, not `.vercel.app`)
 3. ✅ User has `email_notifications = true` in profile
 4. ✅ User has email address in profile
 5. ✅ Check Vercel logs for `[Email]` errors
 6. ✅ Check Resend dashboard for sent emails
 
 **Solution:**
-- Verify Resend domain in Resend dashboard
+- Use your own domain (not free public domains)
+- Verify domain in Resend dashboard
 - Ensure environment variables are set for Production
 - Redeploy after updating environment variables
 
