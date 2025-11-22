@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { createClient } from '@/lib/supabase/client';
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 import {
   Form,
@@ -13,27 +14,29 @@ import {
   FormDescription,
   FormMessage,
   FormField,
-} from '@/components/ui/form';
-import { ControlledInput } from '@/components/controlled-input';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { ResetPasswordFormData, resetPasswordSchema } from '@/lib/schemas';
+} from "@/components/ui/form";
+import { ControlledInput } from "@/components/controlled-input";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ResetPasswordFormData, resetPasswordSchema } from "@/lib/schemas";
 
 export function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const form = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
-      email: '',
+      email: "",
     },
   });
 
   async function onSubmit(data: ResetPasswordFormData) {
     setIsLoading(true);
-    setError('');
+    setError("");
+    const toastId = toast.loading("Sending reset link...");
+
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
@@ -41,9 +44,12 @@ export function ResetPasswordForm() {
       });
       if (error) throw error;
 
+      toast.success("Reset link sent! Check your email.", { id: toastId });
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send reset email');
+      const errorMessage = err.message || "Failed to send reset email";
+      setError(errorMessage);
+      toast.error(errorMessage, { id: toastId });
     } finally {
       setIsLoading(false);
     }
@@ -51,16 +57,16 @@ export function ResetPasswordForm() {
 
   if (success) {
     return (
-      <div className='space-y-6 text-center'>
-        <div className='space-y-2'>
-          <h2 className='text-2xl font-bold'>Check your email</h2>
-          <p className='text-muted-foreground'>
+      <div className="space-y-6 text-center">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold">Check your email</h2>
+          <p className="text-muted-foreground">
             We've sent a password reset link to your email address.
           </p>
         </div>
         <Link
-          href='/auth/login'
-          className='inline-block text-primary hover:underline font-medium'
+          href="/login"
+          className="inline-block text-primary hover:underline font-medium"
         >
           Back to login
         </Link>
@@ -70,30 +76,30 @@ export function ResetPasswordForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {error && (
-          <div className='p-3 bg-destructive/10 text-destructive rounded-md text-sm'>
+          <div className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">
             {error}
           </div>
         )}
 
         <ControlledInput
-          name='email'
-          label='Email Address'
-          type='email'
-          placeholder='your@email.com'
+          name="email"
+          label="Email Address"
+          type="email"
+          placeholder="your@email.com"
           required
         />
 
-        <Button type='submit' className='w-full' disabled={isLoading}>
-          {isLoading ? 'Sending...' : 'Send Reset Link'}
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? "Sending..." : "Send Reset Link"}
         </Button>
 
-        <p className='text-center text-sm text-muted-foreground'>
-          Remember your password?{' '}
+        <p className="text-center text-sm text-muted-foreground">
+          Remember your password?{" "}
           <Link
-            href='/login'
-            className='text-primary hover:underline font-medium'
+            href="/login"
+            className="text-primary hover:underline font-medium"
           >
             Sign In
           </Link>
