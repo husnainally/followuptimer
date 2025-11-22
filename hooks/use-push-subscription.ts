@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { getVapidPublicKey } from "@/lib/push-notification";
 
 interface PushSubscriptionState {
   isSupported: boolean;
@@ -112,7 +111,7 @@ export function usePushSubscription() {
       // Subscribe to push notifications
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey,
+        applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
       });
 
       // Send subscription to server
