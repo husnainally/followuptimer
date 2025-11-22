@@ -6,11 +6,26 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next");
+  const error = searchParams.get("error");
+  const errorDescription = searchParams.get("error_description");
+
+  // Handle OAuth errors
+  if (error) {
+    console.error("[Auth Callback] OAuth error:", {
+      error,
+      errorDescription,
+      url: request.url,
+    });
+    return NextResponse.redirect(
+      `${origin}/auth/auth-code-error?error=${encodeURIComponent(error)}&message=${encodeURIComponent(errorDescription || "Authentication failed")}`
+    );
+  }
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const { error: exchangeError, data } = await supabase.auth.exchangeCodeForSession(code);
+    
+    if (!exchangeError && data.session) {
       // Get user to check admin status
       const {
         data: { user },
@@ -37,9 +52,25 @@ export async function GET(request: Request) {
       } else {
         return NextResponse.redirect(`${origin}${redirectPath}`);
       }
+    } else {
+      // Log the error for debugging
+      console.error("[Auth Callback] Code exchange error:", {
+        error: exchangeError,
+        code: code.substring(0, 20) + "...",
+        url: request.url,
+      });
+      
+      // Redirect with error details
+      const errorMessage = exchangeError?.message || "Invalid or expired confirmation link";
+      return NextResponse.redirect(
+        `${origin}/auth/auth-code-error?error=${encodeURIComponent(exchangeError?.message || "exchange_failed")}&message=${encodeURIComponent(errorMessage)}`
+      );
     }
   }
 
-  // Return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  // No code provided
+  console.error("[Auth Callback] No code provided:", request.url);
+  return NextResponse.redirect(
+    `${origin}/auth/auth-code-error?error=no_code&message=${encodeURIComponent("No confirmation code provided")}`
+  );
 }
