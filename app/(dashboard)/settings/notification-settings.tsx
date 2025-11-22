@@ -4,13 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { ControlledSwitch } from "@/components/controlled-switch";
@@ -43,6 +37,7 @@ export function NotificationSettings() {
 
   useEffect(() => {
     loadNotificationSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadNotificationSettings() {
@@ -55,14 +50,16 @@ export function NotificationSettings() {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("email_notifications, push_enabled, reminder_before_minutes")
+          .select(
+            "email_notifications, push_notifications, reminder_before_minutes"
+          )
           .eq("id", user.id)
           .single();
 
         if (profile) {
           form.reset({
             emailNotifications: profile.email_notifications ?? true,
-            pushNotifications: profile.push_enabled ?? true,
+            pushNotifications: profile.push_notifications ?? false,
             reminderAlerts: true,
             weeklyDigest: false,
           });
@@ -88,15 +85,33 @@ export function NotificationSettings() {
         return;
       }
 
+      // Update notification preferences
       const { error } = await supabase
         .from("profiles")
         .update({
           email_notifications: data.emailNotifications,
-          push_enabled: data.pushNotifications,
+          push_notifications: data.pushNotifications,
         })
         .eq("id", user.id);
 
       if (error) throw error;
+
+      // If push notifications are enabled and supported, try to subscribe
+      if (
+        data.pushNotifications &&
+        pushSubscription.isSupported &&
+        !pushSubscription.isSubscribed
+      ) {
+        const subscribed = await pushSubscription.subscribe();
+        if (!subscribed) {
+          toast.warning(
+            "Push notifications enabled, but browser subscription failed. Please click 'Enable Browser Push Notifications' button."
+          );
+        }
+      } else if (!data.pushNotifications && pushSubscription.isSubscribed) {
+        // If disabled, unsubscribe
+        await pushSubscription.unsubscribe();
+      }
 
       setSaveSuccess(true);
       toast.success("Notification settings updated");
@@ -139,30 +154,41 @@ export function NotificationSettings() {
                 <div className="ml-6 space-y-2">
                   {!pushSubscription.isSubscribed &&
                     pushSubscription.permission !== "denied" && (
+                      <div className="space-y-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={pushSubscription.subscribe}
+                          disabled={pushSubscription.isLoading}
+                        >
+                          {pushSubscription.isLoading
+                            ? "Enabling..."
+                            : "Enable Browser Push Notifications"}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          ⚠️ You must click this button to enable browser push
+                          notifications, even if the toggle above is ON.
+                        </p>
+                      </div>
+                    )}
+                  {pushSubscription.isSubscribed && (
+                    <div className="space-y-2">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={pushSubscription.subscribe}
+                        onClick={pushSubscription.unsubscribe}
                         disabled={pushSubscription.isLoading}
                       >
                         {pushSubscription.isLoading
-                          ? "Enabling..."
-                          : "Enable Browser Push Notifications"}
+                          ? "Disabling..."
+                          : "Disable Browser Push Notifications"}
                       </Button>
-                    )}
-                  {pushSubscription.isSubscribed && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={pushSubscription.unsubscribe}
-                      disabled={pushSubscription.isLoading}
-                    >
-                      {pushSubscription.isLoading
-                        ? "Disabling..."
-                        : "Disable Browser Push Notifications"}
-                    </Button>
+                      <p className="text-xs text-green-600 dark:text-green-400">
+                        ✓ Browser push subscription is active
+                      </p>
+                    </div>
                   )}
                   {pushSubscription.permission === "denied" && (
                     <div className="flex items-center gap-2 text-sm text-destructive">
@@ -172,11 +198,6 @@ export function NotificationSettings() {
                         your browser settings.
                       </span>
                     </div>
-                  )}
-                  {pushSubscription.isSubscribed && (
-                    <p className="text-xs text-muted-foreground">
-                      ✓ Push notifications are enabled
-                    </p>
                   )}
                 </div>
               )}
