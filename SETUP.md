@@ -9,7 +9,7 @@ A Next.js reminder app with affirmations, powered by Supabase, Resend, and QStas
 - Node.js 18+ installed
 - A Supabase account
 - A Resend account (for email notifications)
-- An Upstash QStash account (for scheduled reminders)
+- An Upstash QStash account (for scheduled reminders)   
 
 ---
 
