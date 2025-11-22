@@ -38,11 +38,18 @@ export function usePushSubscription() {
       let isSubscribed = false;
 
       try {
+        // Wait for service worker to be ready (it should be registered by ServiceWorkerRegister component)
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
         isSubscribed = !!subscription;
       } catch (error) {
         console.error("Error checking subscription:", error);
+        // If service worker isn't ready, try to register it
+        try {
+          await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+        } catch (regError) {
+          console.error("Error registering service worker:", regError);
+        }
       }
 
       setState({
@@ -75,10 +82,13 @@ export function usePushSubscription() {
         return false;
       }
 
-      // Register service worker
-      const registration = await navigator.serviceWorker.register("/sw.js", {
-        scope: "/",
-      });
+      // Register service worker (if not already registered)
+      let registration = await navigator.serviceWorker.getRegistration("/");
+      if (!registration) {
+        registration = await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+        });
+      }
       await navigator.serviceWorker.ready;
 
       // Get VAPID public key from API
