@@ -1,5 +1,10 @@
 import { Client } from "@upstash/qstash";
 
+// Use local QStash in development if QSTASH_URL is set to localhost
+const isLocalQStash =
+  process.env.QSTASH_URL?.includes("127.0.0.1") ||
+  process.env.QSTASH_URL?.includes("localhost");
+
 const qstash = new Client({
   token: process.env.QSTASH_TOKEN!,
   baseUrl: process.env.QSTASH_URL || "https://qstash.upstash.io",

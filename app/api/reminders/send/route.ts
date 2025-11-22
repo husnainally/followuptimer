@@ -359,7 +359,12 @@ async function handler(request: Request) {
 }
 
 // Enable signature verification in production (when QSTASH_CURRENT_SIGNING_KEY is set)
-// In development with local QStash, signature verification still works
-export const POST = process.env.QSTASH_CURRENT_SIGNING_KEY
-  ? verifySignatureAppRouter(handler)
-  : handler;
+// Skip signature verification for local QStash development
+const isLocalQStash =
+  process.env.QSTASH_URL?.includes("127.0.0.1") ||
+  process.env.QSTASH_URL?.includes("localhost");
+
+export const POST =
+  process.env.QSTASH_CURRENT_SIGNING_KEY && !isLocalQStash
+    ? verifySignatureAppRouter(handler)
+    : handler;
