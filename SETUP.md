@@ -1,4 +1,4 @@
-# FollowUpTimer - Setup Guide
+# FollowUpTimer - Setup Guide Flow
 
 A Next.js reminder app with affirmations, powered by Supabase, Resend, and QStash.
 
