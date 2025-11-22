@@ -54,6 +54,16 @@ async function handler(request: Request) {
     const pushEnabled = profile?.push_notifications ?? false;
     const inAppEnabled = profile?.in_app_notifications ?? false;
 
+    if (!isProduction) {
+      console.log("[Webhook] User preferences:", {
+        userId: reminder.user_id,
+        email: emailEnabled,
+        push: pushEnabled,
+        inApp: inAppEnabled,
+        userEmail: profile?.email,
+      });
+    }
+
     // Track results for all notification types
     const notificationResults: Array<{
       method: string;

@@ -64,23 +64,33 @@ export async function sendPushNotification({
     // Get user's push subscriptions from database
     const { data: subscriptions, error } = await supabase
       .from("push_subscriptions")
-      .select("*")
+      .select("endpoint, p256dh, auth")
       .eq("user_id", userId);
 
     if (error) {
-      console.error("Error fetching push subscriptions:", error);
+      console.error("[Push] Error fetching push subscriptions:", {
+        error,
+        userId,
+      });
       return {
         success: false,
-        message: "Failed to fetch subscriptions",
+        message: `Failed to fetch subscriptions: ${error.message}`,
       };
     }
 
     if (!subscriptions || subscriptions.length === 0) {
+      console.log("[Push] No push subscriptions found for user:", userId);
       return {
         success: false,
-        message: "No push subscriptions found for user",
+        message:
+          "No push subscriptions found. Please enable push notifications in settings.",
       };
     }
+
+    console.log("[Push] Found subscriptions:", {
+      userId,
+      count: subscriptions.length,
+    });
 
     // Create notification payload
     const payload = JSON.stringify({
@@ -101,38 +111,83 @@ export async function sendPushNotification({
 
     // Send to all user's subscriptions
     const results = await Promise.allSettled(
-      subscriptions.map(async (subscription: PushSubscription) => {
-        try {
-          const pushSubscription = {
-            endpoint: subscription.endpoint,
-            keys: {
-              p256dh: subscription.p256dh,
-              auth: subscription.auth,
-            },
-          };
+      subscriptions.map(
+        async (subscription: {
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+        }) => {
+          try {
+            const pushSubscription = {
+              endpoint: subscription.endpoint,
+              keys: {
+                p256dh: subscription.p256dh,
+                auth: subscription.auth,
+              },
+            };
 
-          await webpush.sendNotification(pushSubscription, payload);
-          return { success: true, endpoint: subscription.endpoint };
-        } catch (error) {
-          // If subscription is invalid, remove it from database
-          if (error && typeof error === "object" && "statusCode" in error) {
-            const statusCode = error.statusCode as number;
-            if (statusCode === 410 || statusCode === 404) {
-              // Subscription expired or not found, remove it
-              await supabase
-                .from("push_subscriptions")
-                .delete()
-                .eq("endpoint", subscription.endpoint);
+            console.log("[Push] Sending notification to:", {
+              endpoint: subscription.endpoint.substring(0, 50) + "...",
+              userId,
+            });
+
+            await webpush.sendNotification(pushSubscription, payload);
+
+            console.log("[Push] Notification sent successfully:", {
+              endpoint: subscription.endpoint.substring(0, 50) + "...",
+            });
+
+            return { success: true, endpoint: subscription.endpoint };
+          } catch (error) {
+            console.error("[Push] Error sending to subscription:", {
+              endpoint: subscription.endpoint.substring(0, 50) + "...",
+              error: error instanceof Error ? error.message : String(error),
+              statusCode:
+                error && typeof error === "object" && "statusCode" in error
+                  ? error.statusCode
+                  : undefined,
+            });
+
+            // If subscription is invalid, remove it from database
+            if (error && typeof error === "object" && "statusCode" in error) {
+              const statusCode = error.statusCode as number;
+              if (statusCode === 410 || statusCode === 404) {
+                console.log(
+                  "[Push] Removing invalid subscription:",
+                  subscription.endpoint.substring(0, 50) + "..."
+                );
+                await supabase
+                  .from("push_subscriptions")
+                  .delete()
+                  .eq("endpoint", subscription.endpoint);
+              }
             }
+            throw error;
           }
-          throw error;
         }
-      })
+      )
     );
 
     // Count successful sends
     const successful = results.filter((r) => r.status === "fulfilled").length;
     const total = results.length;
+    const failed = results.filter((r) => r.status === "rejected");
+
+    if (failed.length > 0) {
+      console.error("[Push] Failed notifications:", {
+        total,
+        successful,
+        failed: failed.length,
+        errors: failed.map((r) => (r.status === "rejected" ? r.reason : null)),
+      });
+    }
+
+    console.log("[Push] Notification results:", {
+      userId,
+      total,
+      successful,
+      failed: failed.length,
+    });
 
     return {
       success: successful > 0,
