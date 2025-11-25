@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -7,13 +7,14 @@ interface SendWelcomeEmailOptions {
 }
 
 export async function sendWelcomeEmail({ to }: SendWelcomeEmailOptions) {
-  const from =
-    process.env.RESEND_FROM || 'FollowUpTimer <no-reply@followuptimer.app>';
+  // Use RESEND_FROM if set, otherwise fall back to Resend's test domain
+  // Note: Test domain only works for verified test emails in Resend dashboard
+  const from = process.env.RESEND_FROM || "onboarding@resend.dev";
 
   return await resend.emails.send({
     from,
     to,
-    subject: '🎉 Welcome to FollowUpTimer Waitlist!',
+    subject: "🎉 Welcome to FollowUpTimer Waitlist!",
     text: `Welcome to FollowUpTimer!\n\nThank you for joining our waitlist. We're excited to have you on board!\n\nYou'll be among the first to know when we launch. We're building something special – a smart reminder app with motivational affirmations to help you stay on track.\n\nStay tuned!\n\nThe FollowUpTimer Team`,
     html: `
       <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">

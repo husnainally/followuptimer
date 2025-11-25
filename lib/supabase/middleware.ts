@@ -1,5 +1,5 @@
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -15,7 +15,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({
@@ -39,18 +39,18 @@ export async function updateSession(request: NextRequest) {
 
   // Protected routes
   const protectedRoutes = [
-    '/dashboard',
-    '/reminders',
-    '/settings',
-    '/step1',
-    '/step2',
+    "/dashboard",
+    "/reminders",
+    "/settings",
+    "/step1",
+    "/step2",
   ];
   const isProtectedRoute = protectedRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   );
 
   // Auth routes
-  const authRoutes = ['/login', '/signup', '/forgot-password'];
+  const authRoutes = ["/login", "/signup", "/forgot-password"];
   const isAuthRoute = authRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   );
@@ -58,15 +58,29 @@ export async function updateSession(request: NextRequest) {
   if (!user && isProtectedRoute) {
     // Redirect to login if accessing protected route without auth
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
+    url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
   if (user && isAuthRoute) {
-    // Redirect to dashboard if accessing auth pages while logged in
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
+    // Redirect to appropriate dashboard based on admin status
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_admin")
+        .eq("id", user.id)
+        .single();
+
+      const redirectPath = profile?.is_admin ? "/admin/waitlist" : "/dashboard";
+      const url = request.nextUrl.clone();
+      url.pathname = redirectPath;
+      return NextResponse.redirect(url);
+    } catch {
+      // Fallback to regular dashboard if check fails
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

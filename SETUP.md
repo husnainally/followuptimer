@@ -1,6 +1,6 @@
-# FollowUpTimer - Setup Guide
+# FollowUpTimer - Setup Guide Flow
 
-A Next.js reminder app with affirmations, powered by Supabase, Resend, and QStash.
+A Next.js reminder app with affirmations, powered by Supabase, Resend, and QStash.   
 
 ## 🚀 Quick Start
 
@@ -9,7 +9,7 @@ A Next.js reminder app with affirmations, powered by Supabase, Resend, and QStas
 - Node.js 18+ installed
 - A Supabase account
 - A Resend account (for email notifications)
-- An Upstash QStash account (for scheduled reminders)
+- An Upstash QStash account (for scheduled reminders)   
 
 ---
 
@@ -18,7 +18,7 @@ A Next.js reminder app with affirmations, powered by Supabase, Resend, and QStas
 ### 1. Clone and Install Dependencies
 
 ```bash
-git clone <your-repo-url>
+git clone [<your-repo-url>](https://github.com/husnainally/followuptimer)
 cd followuptimer
 npm install
 ```
@@ -46,6 +46,7 @@ In your Supabase project dashboard:
 2. Create a new query
 3. Copy the contents of `supabase/migrations/20241119000000_initial_schema.sql`
 4. Run the query
+
 
 This will create:
 - `profiles` table (user preferences)

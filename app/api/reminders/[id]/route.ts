@@ -1,6 +1,6 @@
-import { createClient } from '@/lib/supabase/server';
-import { NextResponse } from 'next/server';
-import { cancelScheduledReminder, scheduleReminder } from '@/lib/qstash';
+import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { cancelScheduledReminder, scheduleReminder } from "@/lib/qstash";
 
 export async function GET(
   request: Request,
@@ -14,28 +14,31 @@ export async function GET(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { data: reminder, error } = await supabase
-      .from('reminders')
-      .select('*')
-      .eq('id', id)
-      .eq('user_id', user.id)
+      .from("reminders")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", user.id)
       .single();
 
     if (error) throw error;
 
     if (!reminder) {
       return NextResponse.json(
-        { error: 'Reminder not found' },
+        { error: "Reminder not found" },
         { status: 404 }
       );
     }
 
     return NextResponse.json({ reminder });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Failed to fetch reminder:", error);
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch reminder";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -51,7 +54,7 @@ export async function PATCH(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
@@ -66,33 +69,54 @@ export async function PATCH(
     if (status !== undefined) updates.status = status;
 
     const { data: reminder, error } = await supabase
-      .from('reminders')
+      .from("reminders")
       .update(updates)
-      .eq('id', id)
-      .eq('user_id', user.id)
+      .eq("id", id)
+      .eq("user_id", user.id)
       .select()
       .single();
 
     if (error) throw error;
 
     // Update QStash job if remind_at changed
-    if (remind_at !== undefined && reminder.qstash_message_id) {
-      await cancelScheduledReminder(reminder.qstash_message_id);
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const newQstashMessageId = await scheduleReminder({
-        reminderId: reminder.id,
-        remindAt: new Date(reminder.remind_at),
-        callbackUrl: `${appUrl}/api/reminders/send`,
-      });
-      await supabase
-        .from('reminders')
-        .update({ qstash_message_id: newQstashMessageId })
-        .eq('id', reminder.id);
+    const isLocalDev = process.env.NODE_ENV === "development";
+    const isLocalQStash =
+      process.env.QSTASH_URL?.includes("127.0.0.1") ||
+      process.env.QSTASH_URL?.includes("localhost");
+
+    const appUrl =
+      isLocalDev && isLocalQStash
+        ? process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+        : process.env.NEXT_PUBLIC_APP_URL;
+
+    if (
+      remind_at !== undefined &&
+      reminder.qstash_message_id &&
+      process.env.QSTASH_TOKEN &&
+      appUrl
+    ) {
+      try {
+        await cancelScheduledReminder(reminder.qstash_message_id);
+        const newQstashMessageId = await scheduleReminder({
+          reminderId: reminder.id,
+          remindAt: new Date(reminder.remind_at),
+          callbackUrl: `${appUrl}/api/reminders/send`,
+        });
+        await supabase
+          .from("reminders")
+          .update({ qstash_message_id: newQstashMessageId })
+          .eq("id", reminder.id);
+      } catch (qstashError) {
+        console.error("QStash rescheduling failed (non-fatal):", qstashError);
+      }
     }
 
     return NextResponse.json({ reminder });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Failed to update reminder:", error);
+    const message =
+      error instanceof Error ? error.message : "Failed to update reminder";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -108,32 +132,39 @@ export async function DELETE(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Get reminder first to access qstash_message_id
     const { data: reminder } = await supabase
-      .from('reminders')
-      .select('qstash_message_id')
-      .eq('id', id)
-      .eq('user_id', user.id)
+      .from("reminders")
+      .select("qstash_message_id")
+      .eq("id", id)
+      .eq("user_id", user.id)
       .single();
 
-    // Cancel QStash job if exists
-    if (reminder?.qstash_message_id) {
-      await cancelScheduledReminder(reminder.qstash_message_id);
+    // Cancel QStash job if exists (only in production)
+    if (reminder?.qstash_message_id && process.env.QSTASH_TOKEN) {
+      try {
+        await cancelScheduledReminder(reminder.qstash_message_id);
+      } catch (qstashError) {
+        console.error("QStash cancellation failed (non-fatal):", qstashError);
+      }
     }
 
     const { error } = await supabase
-      .from('reminders')
+      .from("reminders")
       .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
+      .eq("id", id)
+      .eq("user_id", user.id);
 
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Failed to delete reminder:", error);
+    const message =
+      error instanceof Error ? error.message : "Failed to delete reminder";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
