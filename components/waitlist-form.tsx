@@ -10,11 +10,13 @@ import { waitlistSchema, type WaitlistFormData } from '@/lib/schemas';
 import { Mail, CheckCircle } from 'lucide-react';
 import { ControlledInput } from './controlled-input';
 import { toast } from 'sonner';
+import { useRouter } from "next/navigation";
 
 export function WaitlistForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
   const form = useForm<WaitlistFormData>({
     resolver: zodResolver(waitlistSchema),
@@ -42,9 +44,12 @@ export function WaitlistForm() {
       setSuccess(true);
       toast.success("You're on the waitlist! 🎉");
       form.reset();
+      
 
-      // Reset success message after 5 seconds
-      setTimeout(() => setSuccess(false), 5000);
+      // Redirect to login 
+      setTimeout(() => {
+        router.push("/login");
+      }, 2000);
     } catch (err: any) {
       setError(err.message || 'Failed to join waitlist. Please try again.');
       toast.error(err.message || 'Failed to join waitlist. Please try again.');

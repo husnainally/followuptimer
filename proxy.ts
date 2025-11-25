@@ -1,7 +1,9 @@
 import { updateSession } from '@/lib/supabase/middleware';
 import { type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
+// Next.js App Router expects a `proxy` export for request interception.
+// Forward to the existing `updateSession` helper which returns a NextResponse.
+export async function proxy(request: NextRequest) {
   return await updateSession(request);
 }
 
