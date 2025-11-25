@@ -12,6 +12,7 @@ import { Check, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const notificationSettingsSchema = z.object({
   emailNotifications: z.boolean().default(true),
@@ -125,8 +126,19 @@ export function NotificationSettings() {
   if (loading) {
     return (
       <Card>
-        <CardContent className="pt-6">
-          <div className="text-center text-muted-foreground">Loading...</div>
+        <CardContent className="space-y-4 pt-6">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <div key={idx} className="flex items-center justify-between border border-dashed border-border/40 rounded-xl p-4">
+              <div className="space-y-2 w-full">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-64" />
+              </div>
+              <Skeleton className="h-6 w-12 rounded-full" />
+            </div>
+          ))}
+          <div className="flex justify-end">
+            <Skeleton className="h-10 w-36 rounded-full" />
+          </div>
         </CardContent>
       </Card>
     );

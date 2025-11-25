@@ -17,6 +17,7 @@ import { ControlledInput } from '@/components/controlled-input';
 import { Check } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const profileSettingsSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -107,8 +108,18 @@ export function ProfileSettings() {
   if (loading) {
     return (
       <Card>
-        <CardContent className='pt-6'>
-          <div className='text-center text-muted-foreground'>Loading...</div>
+        <CardContent className='space-y-4 pt-6'>
+          <div className='space-y-2'>
+            <Skeleton className='h-4 w-24' />
+            <Skeleton className='h-10 w-full' />
+          </div>
+          <div className='space-y-2'>
+            <Skeleton className='h-4 w-32' />
+            <Skeleton className='h-10 w-full' />
+          </div>
+          <div className='flex justify-end pt-2'>
+            <Skeleton className='h-10 w-32 rounded-full' />
+          </div>
         </CardContent>
       </Card>
     );

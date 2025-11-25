@@ -8,8 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Form } from "@/components/ui/form"
 import { reminderSchema, type ReminderFormData } from "@/lib/schemas"
-import { Calendar as CalendarIcon, Clock } from "lucide-react"
+import { Calendar as CalendarIcon } from "lucide-react"
 import { ControlledInput } from "@/components/controlled-input"
+import { ControlledTextarea } from "@/components/controlled-textarea"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
@@ -80,8 +81,8 @@ export default function CreateReminderPage() {
       
 
       {/* Form Card */}
-      <Card className="bg-[#FAFAFA] ">
-        <CardHeader className="border-b">
+      <Card className="bg-card">
+        <CardHeader className="border-b border-border">
           <CardTitle>Reminder Details</CardTitle>
           <CardDescription>Fill in the details for your reminder</CardDescription>
         </CardHeader>
@@ -89,13 +90,14 @@ export default function CreateReminderPage() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {/* Message Input */}
-              <ControlledInput
+              <ControlledTextarea
                 name="message"
                 label="Reminder Message"
                 placeholder="What do you want to be reminded about?"
                 description="Keep it clear and concise"
                 required
-                startIcon={<Clock className="w-4 h-4" />}
+                className="border border-border bg-white"
+                rows={4}
               />
 
               {/* Remind At - Date and Time */}
@@ -145,7 +147,7 @@ export default function CreateReminderPage() {
                       step="60"
                       value={timeValue}
                       onChange={(event) => setTimeValue(event.target.value)}
-                      className="bg-white appearance-none w-40 [&::-webkit-calendar-picker-indicator]:hidden"
+                      className="bg-white border border-border appearance-none w-full [&::-webkit-calendar-picker-indicator]:hidden"
                     />
                   </div>
                 </div>
@@ -168,7 +170,7 @@ export default function CreateReminderPage() {
                       className={`p-3 rounded-lg border-2 transition-all text-sm font-medium capitalize ${
                         form.watch("tone") === tone
                           ? "border-primary bg-primary/5 text-primary"
-                          : "border-border bg-white text-foreground hover:border-primary/50"
+                          : "border-border bg-card text-foreground hover:border-primary/50"
                       }`}
                     >
                       {tone}
@@ -178,7 +180,7 @@ export default function CreateReminderPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t">
+              <div className="flex gap-3 pt-4 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => router.back()}>
                   Cancel
                 </Button>

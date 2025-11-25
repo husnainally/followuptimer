@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 import { Trash2, CheckCircle2, Clock, AlertCircle, Bell } from 'lucide-react';
 import { toast } from 'sonner';
@@ -23,11 +24,11 @@ type Notification = {
 function getStatusIcon(status: string) {
   switch (status) {
     case 'delivered':
-      return <CheckCircle2 className='w-5 h-5 text-green-600' />;
+      return <CheckCircle2 className='w-5 h-5 text-primary' />;
     case 'snoozed':
-      return <Clock className='w-5 h-5 text-blue-600' />;
+      return <Clock className='w-5 h-5 text-muted-foreground' />;
     case 'failed':
-      return <AlertCircle className='w-5 h-5 text-red-600' />;
+      return <AlertCircle className='w-5 h-5 text-destructive' />;
     default:
       return null;
   }
@@ -37,18 +38,18 @@ function getStatusBadge(status: string) {
   switch (status) {
     case 'delivered':
       return (
-        <Badge className='bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'>
+        <Badge className='bg-primary/10 text-primary border-0'>
           Delivered
         </Badge>
       );
     case 'snoozed':
       return (
-        <Badge className='bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'>
+        <Badge className='bg-muted/60 text-foreground border-0'>
           Snoozed
         </Badge>
       );
     case 'failed':
-      return <Badge variant='destructive'>Failed</Badge>;
+      return <Badge className='bg-destructive/10 text-destructive border-0'>Failed</Badge>;
     default:
       return null;
   }
@@ -103,63 +104,82 @@ export default function NotificationsPage() {
 
   if (loading) {
     return (
-      <div className='flex items-center justify-center min-h-[400px] p-6'>
-        <div className='text-muted-foreground'>Loading notifications...</div>
+      <div className='flex flex-col gap-6 p-6'>
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <Card key={`stat-skeleton-${idx}`}>
+              <CardHeader className='pb-3 space-y-2'>
+                <Skeleton className='h-4 w-24' />
+                <Skeleton className='h-4 w-16' />
+              </CardHeader>
+              <CardContent className='space-y-3'>
+                <div className='flex items-end gap-2'>
+                  <Skeleton className='h-8 w-16' />
+                  <Skeleton className='h-4 w-4' />
+                </div>
+                <Skeleton className='h-3 w-28' />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className='space-y-3'>
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <Card key={`notif-skeleton-${idx}`}>
+              <CardContent className='pt-6 space-y-4'>
+                <div className='flex items-center gap-3'>
+                  <Skeleton className='h-8 w-8 rounded-full' />
+                  <div className='flex-1 space-y-2'>
+                    <Skeleton className='h-4 w-48' />
+                    <Skeleton className='h-3 w-32' />
+                  </div>
+                  <Skeleton className='h-6 w-20 rounded-full' />
+                </div>
+                <Skeleton className='h-16 w-full rounded-md' />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className='flex flex-col gap-6 p-6'>
+    <div className='flex flex-col gap-6 '>
       {/* Header Section */}
 
       {/* Stats Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-        <Card>
-          <CardHeader className='pb-3'>
-            <CardTitle className='text-sm font-medium'>Delivered</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className='flex items-end gap-2'>
-              <div className='text-3xl font-bold'>{deliveredCount}</div>
-              <CheckCircle2 className='w-4 h-4 text-green-600 mb-1' />
+      <Card className='bg-card border-border'>
+        <CardContent className='flex flex-wrap items-center justify-between gap-4 py-4'>
+          <div className='flex items-center gap-3 flex-1 min-w-[30%]'>
+            <span className='inline-flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary'>
+              <CheckCircle2 className='w-5 h-5' />
+            </span>
+            <div>
+              <p className='text-xs text-muted-foreground'>Delivered</p>
+              <p className='text-2xl font-semibold text-foreground'>{deliveredCount}</p>
             </div>
-            <p className='text-xs text-muted-foreground mt-2'>
-              Successfully sent
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className='pb-3'>
-            <CardTitle className='text-sm font-medium'>Snoozed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className='flex items-end gap-2'>
-              <div className='text-3xl font-bold'>{snoozedCount}</div>
-              <Clock className='w-4 h-4 text-blue-600 mb-1' />
+          </div>
+          <div className='flex items-center gap-3 flex-1 min-w-[30%]'>
+            <span className='inline-flex size-10 items-center justify-center rounded-2xl bg-muted/40 text-muted-foreground'>
+              <Clock className='w-5 h-5' />
+            </span>
+            <div>
+              <p className='text-xs text-muted-foreground'>Snoozed</p>
+              <p className='text-2xl font-semibold text-foreground'>{snoozedCount}</p>
             </div>
-            <p className='text-xs text-muted-foreground mt-2'>
-              Postponed reminders
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className='pb-3'>
-            <CardTitle className='text-sm font-medium'>Failed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className='flex items-end gap-2'>
-              <div className='text-3xl font-bold'>{failedCount}</div>
-              <AlertCircle className='w-4 h-4 text-red-600 mb-1' />
+          </div>
+          <div className='flex items-center gap-3 flex-1 min-w-[30%]'>
+            <span className='inline-flex size-10 items-center justify-center rounded-2xl bg-destructive/10 text-destructive'>
+              <AlertCircle className='w-5 h-5' />
+            </span>
+            <div>
+              <p className='text-xs text-muted-foreground'>Failed</p>
+              <p className='text-2xl font-semibold text-foreground'>{failedCount}</p>
             </div>
-            <p className='text-xs text-muted-foreground mt-2'>
-              Undelivered notifications
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Notifications List */}
       <div className='space-y-3'>
@@ -167,7 +187,7 @@ export default function NotificationsPage() {
           <Card>
             <CardContent className='pt-12'>
               <div className='text-center'>
-                <Bell className='w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50' />
+                <Bell className='w-12 h-12 text-muted-foreground/50 mx-auto mb-4' />
                 <h3 className='font-semibold text-lg'>No notifications yet</h3>
                 <p className='text-muted-foreground text-sm mt-1'>
                   Your sent reminders will appear here
