@@ -4,14 +4,21 @@ import { useCallback, useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { format } from "date-fns"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Form } from "@/components/ui/form"
 import { reminderSchema, type ReminderFormData } from "@/lib/schemas"
-import { Clock, Trash2, AlertCircle } from "lucide-react"
-import { ControlledInput } from "@/components/controlled-input"
+import { Calendar as CalendarIcon, Trash2, AlertCircle } from "lucide-react"
+import { ControlledTextarea } from "@/components/controlled-textarea"
 import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 export default function ReminderDetailPage() {
   const router = useRouter()
@@ -33,6 +40,9 @@ export default function ReminderDetailPage() {
       notification_method: "email",
     },
   })
+  const initialDate = new Date(Date.now() + 60 * 60 * 1000)
+  const [dateValue, setDateValue] = useState<Date>(initialDate)
+  const [timeValue, setTimeValue] = useState<string>(format(initialDate, "HH:mm"))
 
   const formatDisplayDate = (date: Date) =>
     new Intl.DateTimeFormat("en-US", {
@@ -64,6 +74,8 @@ export default function ReminderDetailPage() {
         tone: reminder?.tone ?? "motivational",
         notification_method: reminder?.notification_method ?? "email",
       })
+      setDateValue(remindAtDate)
+      setTimeValue(format(remindAtDate, "HH:mm"))
 
       setMeta({
         created_at: reminder?.created_at ? new Date(reminder.created_at) : undefined,
@@ -83,6 +95,14 @@ export default function ReminderDetailPage() {
     loadReminder()
   }, [loadReminder])
 
+  useEffect(() => {
+    if (!dateValue || !timeValue) return
+    const [hours, minutes] = timeValue.split(":").map(Number)
+    const nextDate = new Date(dateValue)
+    nextDate.setHours(hours ?? 0, minutes ?? 0, 0, 0)
+    form.setValue("remind_at", nextDate, { shouldValidate: true })
+  }, [dateValue, timeValue, form])
+
   const toneValue = form.watch("tone")
   const createdAtDisplay = meta?.created_at ? formatDisplayDate(meta.created_at) : "—"
   const updatedAtDisplay = meta?.updated_at ? formatDisplayDate(meta.updated_at) : "—"
@@ -98,8 +118,56 @@ export default function ReminderDetailPage() {
 
   if (initialLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-muted-foreground">Loading reminder...</p>
+      <div className="flex flex-col gap-6 p-6 animate-[fadeIn_0.3s_ease-in-out_forwards]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card className="bg-card">
+              <CardHeader className="border-b border-border">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-4 w-64 mt-2" />
+              </CardHeader>
+              <CardContent className="pt-6 space-y-6">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <div className="grid grid-cols-3 gap-3">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-4 border-t border-border">
+                  <Skeleton className="h-10 w-24" />
+                  <Skeleton className="h-10 flex-1" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="flex flex-col gap-4">
+            <Card className="bg-card">
+              <CardContent className="space-y-3 pt-6">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </CardContent>
+            </Card>
+            <Card className="bg-card">
+              <CardHeader className="border-b border-border">
+                <Skeleton className="h-5 w-32" />
+              </CardHeader>
+              <CardContent className="pt-6">
+                <Skeleton className="h-20 w-full" />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     )
   }
@@ -183,8 +251,8 @@ export default function ReminderDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form Card */}
         <div className="lg:col-span-2">
-          <Card className="">
-            <CardHeader className="border-b">
+          <Card className="bg-card">
+            <CardHeader className="border-b border-border">
               <CardTitle>Reminder Details</CardTitle>
               <CardDescription>Modify your reminder settings</CardDescription>
             </CardHeader>
@@ -192,27 +260,69 @@ export default function ReminderDetailPage() {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                   {/* Message Input */}
-                  <ControlledInput
+                  <ControlledTextarea
                     name="message"
                     label="Reminder Message"
                     placeholder="What do you want to be reminded about?"
-                    startIcon={<Clock className="w-4 h-4" />}
+                    description="Keep it clear and actionable"
+                    required
+                    rows={4}
+                    className="border border-border bg-white"
                   />
 
                   {/* Remind At */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
+                  <div className="space-y-3 overflow-hidden">
+                    <label className="block text-sm font-medium">
                       Remind At <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="datetime-local"
-                      {...form.register("remind_at", {
-                        setValueAs: (value) => new Date(value),
-                      })}
-                      className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
+                    <div className="flex flex-col gap-4 md:flex-row">
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="remind-date" className="px-1 text-xs uppercase text-muted-foreground tracking-wide">
+                          Date
+                        </Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              id="remind-date"
+                              className={cn(
+                                "w-48 justify-between font-normal",
+                                !dateValue && "text-muted-foreground"
+                              )}
+                            >
+                              {dateValue ? format(dateValue, "PPP") : "Select date"}
+                              <CalendarIcon className="h-4 w-4 opacity-70" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={dateValue}
+                              onSelect={(date) => date && setDateValue(date)}
+                              disabled={(date) => date < new Date()}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="remind-time" className="px-1 text-xs uppercase text-muted-foreground tracking-wide">
+                          Time
+                        </Label>
+                        <Input
+                          id="remind-time"
+                          type="time"
+                          step="60"
+                          value={timeValue}
+                          onChange={(event) => setTimeValue(event.target.value)}
+                          className="bg-white border border-border appearance-none w-full [&::-webkit-calendar-picker-indicator]:hidden"
+                        />
+                      </div>
+                    </div>
                     {form.formState.errors.remind_at && (
-                      <p className="text-sm text-destructive mt-1">{form.formState.errors.remind_at.message}</p>
+                      <p className="text-sm text-destructive">{form.formState.errors.remind_at.message}</p>
                     )}
                   </div>
 
@@ -230,7 +340,7 @@ export default function ReminderDetailPage() {
                           className={`p-3 rounded-lg border-2 transition-all text-sm font-medium capitalize ${
                             form.watch("tone") === tone
                               ? "border-primary bg-primary/5 text-primary"
-                              : "border-border bg-background text-foreground hover:border-primary/50"
+                              : "border-border bg-card text-foreground hover:border-primary/50"
                           }`}
                         >
                           {tone}
@@ -240,7 +350,7 @@ export default function ReminderDetailPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-3 pt-4 border-t">
+                  <div className="flex gap-3 pt-4 border-t border-border">
                     <Button type="button" variant="outline" onClick={() => router.back()}>
                       Cancel
                     </Button>
@@ -257,9 +367,8 @@ export default function ReminderDetailPage() {
         {/* Sidebar: Info and Delete */}
         <div className="flex flex-col gap-4">
           {/* Info Card */}
-          <Card className="">
-            
-            <CardContent className=" space-y-3">
+          <Card className="bg-card">
+            <CardContent className="space-y-3 pt-6">
               <p className="text-sm font-medium">Reminder Info</p>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase">Created</p>
@@ -284,7 +393,7 @@ export default function ReminderDetailPage() {
 
           {/* Delete Card */}
           <Card className="bg-destructive/5 border-destructive/20">
-            <CardHeader className="border-b ">
+            <CardHeader className="border-b border-destructive/20">
               <CardTitle className="text-base flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
                 Danger Zone

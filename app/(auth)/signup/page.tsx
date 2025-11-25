@@ -10,17 +10,17 @@ export default function SignupPage() {
   return (
     <AuthLayout
       title="Create your account"
-      description="Please fill the form to create an account"
-      sideEyebrow="Customer Success"
+      description="Start streamlining your follow-ups today. Get started in seconds."
+      sideEyebrow="Calm Productivity"
       sideTitle={
         <>
-          Build stronger <span className="italic font-semibold">relationships</span>
+          Follow through at the <span className="italic font-semibold">right moment</span>
         </>
       }
-      sideSubtitle="Centralize follow-ups, keep handoffs smooth, and delight every customer."
-      sideQuote='"FollowUpTimer keeps our onboarding touchpoints perfectly on track."'
-      sideQuoteAuthor="Miguel Ortega"
-      sideQuoteRole="Head of Customer Experience"
+      sideSubtitle="One-click reminders, real-time notifications, and optional affirmations. Stay organized without adding stress or complexity."
+      sideQuote={`"FollowUpTimer helps me stay consistent and build better habits. It's lightweight, simple, and never overwhelming."`}
+      sideQuoteAuthor="Olivia"
+      sideQuoteRole="Founder"
     >
       <SignupForm />
     </AuthLayout>

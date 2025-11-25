@@ -42,7 +42,7 @@ export function OnboardingLayout({
           )}
         </div>
 
-        <div className="bg-card border w-2/3 rounded-3xl shadow-sm p-6 md:p-10">
+        <div className="bg-card border lg:w-2/3 w-full rounded-3xl shadow-sm p-6 md:p-10">
           {children}
         </div>
       </div>
