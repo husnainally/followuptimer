@@ -57,51 +57,48 @@
   --radius: 0.625rem;
 
   /* ---------------------------------------------- */
-  /*  BRAND COLORS (from your Framer landing page)   */
+  /*  BRAND COLORS - Final Theme                    */
   /* ---------------------------------------------- */
-  /* #FFFFFF   = White Background                    */
-  /* #2B2B2C   = Grey Text / Foreground              */
-  /* #101011   = Dark Mode Background                */
-  /* #DAD4FF   = Soft Lavender Secondary             */
-  /* #F0F2F6   = Input Background                    */
-  /* #583CF1   = Primary Purple (CTA Button Top)     */
-  /* #8771FF   = Light Purple (CTA Button Bottom)    */
+  /* Primary Background: #F4F5F7 (slightly darker than #F9FAFB) */
+  /* Card Background: #FFFFFF                        */
+  /* Text (Dark Slate): #1F2937                      */
+  /* Accent Blue: #3B82F6                            */
 
   /* BASE */
-  --background: oklch(0.98 0 0);        /* #FFFFFF (white background) */
-  --foreground: oklch(0.21 0 0);        /* #2B2B2C (dark grey text) */
+  --background: #F4F5F7;        /* Primary Background - slightly darker */
+  --foreground: #1F2937;        /* Text (Dark Slate) */
 
   /* SURFACES */
-  --card: oklch(0.98 0 0);              /* white */
-  --card-foreground: oklch(0.21 0 0);
+  --card: #FFFFFF;              /* Card Background */
+  --card-foreground: #1F2937;  /* Text (Dark Slate) */
 
-  --popover: oklch(0.98 0 0);
-  --popover-foreground: oklch(0.21 0 0);
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2937;
 
-  /* PRIMARY BUTTON COLOR (Purple Gradient #583CF1 → #8771FF) */
-  --primary: oklch(0.55 0.25 280);      /* #583CF1 */
-  --primary-foreground: oklch(0.98 0 0);
+  /* PRIMARY BUTTON COLOR (Accent Blue) */
+  --primary: #3B82F6;           /* Accent Blue */
+  --primary-foreground: #FFFFFF;
 
   /* SECONDARY */
-  --secondary: oklch(0.94 0.03 290);    /* #DAD4FF */
-  --secondary-foreground: oklch(0.21 0 0);
+  --secondary: #F4F5F7;         /* Primary Background */
+  --secondary-foreground: #1F2937;
 
   /* MUTED / ACCENT */
-  --muted: oklch(0.94 0.03 290);        /* soft lavender */
-  --muted-foreground: oklch(0.45 0 0);
+  --muted: #F4F5F7;             /* Primary Background */
+  --muted-foreground: #6B7280;  /* Muted text color */
 
-  --accent: oklch(0.94 0.03 290);
-  --accent-foreground: oklch(0.21 0 0);
+  --accent: #3B82F6;            /* Accent Blue */
+  --accent-foreground: #FFFFFF;
 
   /* INPUT BACKGROUND */
-  --input: oklch(0.96 0 0);             /* #F0F2F6 converted */
+  --input: #FFFFFF;             /* Card Background */
 
   /* DESTRUCTIVE */
-  --destructive: oklch(0.64 0.24 25);
+  --destructive: #EF4444;       /* Red for destructive actions */
 
   /* BORDER / RING */
-  --border: oklch(0.85 0 0);  /* gray-300 border */
-  --ring: oklch(0.50 0 0);    /* dark gray ring/focus */
+  --border: #E5E7EB;            /* Light gray border */
+  --ring: #3B82F6;              /* Accent Blue for focus ring */
 
   /* CHART COLORS */
   --chart-1: oklch(0.65 0.22 40);
@@ -111,17 +108,17 @@
   --chart-5: oklch(0.78 0.18 70);
 
   /* SIDEBAR */
-  --sidebar: oklch(0.98 0 0);            /* white */
-  --sidebar-foreground: oklch(0.21 0 0);
+  --sidebar: #FFFFFF;            /* Card Background */
+  --sidebar-foreground: #1F2937;  /* Text (Dark Slate) */
 
-  --sidebar-primary: oklch(0.55 0.25 280);  /* purple */
-  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-primary: #3B82F6;     /* Accent Blue */
+  --sidebar-primary-foreground: #FFFFFF;
 
-  --sidebar-accent: oklch(0.94 0.03 290);
-  --sidebar-accent-foreground: oklch(0.21 0 0);
+  --sidebar-accent: #F4F5F7;      /* Primary Background */
+  --sidebar-accent-foreground: #1F2937;
 
-  --sidebar-border: oklch(0.85 0 0);  /* gray-300 border */
-  --sidebar-ring: oklch(0.50 0 0);    /* dark gray ring/focus */
+  --sidebar-border: #E5E7EB;      /* Light gray border */
+  --sidebar-ring: #3B82F6;       /* Accent Blue for focus ring */
 }
 
 /* -------------------------------------------------- */
@@ -186,5 +183,24 @@
   body {
     font-family: "Poppins", var(--font-sans), ui-sans-serif, system-ui;
     @apply bg-background text-foreground;
+  }
+}
+
+/* Fade in animation for skeleton loading */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }

@@ -10,17 +10,17 @@ export default function ResetPasswordPage() {
   return (
     <AuthLayout
       title="Reset your password"
-      description="Enter the email associated with your account."
-      sideEyebrow="Security first"
+      description="Enter your email address and we'll send you a link to reset your password."
+      sideEyebrow="Simple Recovery"
       sideTitle={
         <>
           Get back on <span className="italic font-semibold">track</span>
         </>
       }
-      sideSubtitle="We make it simple to recover access while keeping your workspace secure."
-      sideQuote='"The reset flow was seamless—our team was back in within minutes."'
-      sideQuoteAuthor="Priya Menon"
-      sideQuoteRole="Customer Support Lead"
+      sideSubtitle="We'll help you recover access quickly so you can return to staying consistent with your follow-ups."
+      sideQuote='"The reset process was seamless. I was back to my reminders in minutes, without any stress."'
+      sideQuoteAuthor="Jordan Kim"
+      sideQuoteRole="Freelance Consultant"
     >
       <ResetPasswordForm />
     </AuthLayout>

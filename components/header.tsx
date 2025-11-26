@@ -1,11 +1,18 @@
 'use client';
 
 import { useMemo, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationBell } from '@/components/notification-bell';
 import { createClient } from '@/lib/supabase/client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface UserProfile {
   full_name: string | null;
@@ -45,20 +52,16 @@ export function DashboardHeader() {
   }, []);
 
   const { title, description } = useMemo(() => {
-    if (!pathname)
-      return {
-        title: 'Dashboard',
-        description: 'Manage your reminders and affirmations',
-      };
+    const path = pathname ?? '';
 
-    if (pathname.startsWith('/reminders')) {
-      if (pathname.includes('/create')) {
+    if (path.startsWith('/reminder')) {
+      if (path.includes('/create')) {
         return {
           title: 'Create Reminder',
           description: 'Set up a new reminder with your preferred tone',
         };
       }
-      if (pathname.match(/\/reminders\/[^/]+/)) {
+      if (path.match(/\/reminder\/[^/]+/)) {
         return {
           title: 'Reminder Details',
           description: 'Update the information for this reminder',
@@ -70,7 +73,14 @@ export function DashboardHeader() {
       };
     }
 
-    if (pathname.startsWith('/settings')) {
+    if (path.startsWith('/notifications')) {
+      return {
+        title: 'Notifications',
+        description: 'Review delivery, snoozed, and failed events',
+      };
+    }
+
+    if (path.startsWith('/settings')) {
       return {
         title: 'Settings',
         description: 'Customize your preferences and notifications',
@@ -84,49 +94,68 @@ export function DashboardHeader() {
   }, [pathname]);
 
   return (
-    <header className=''>
-      <div className='flex flex-col gap-4 px-4 py-1 md:flex-row md:items-center md:justify-between md:px-6'>
-        <div className='flex justify-center items-center gap-3'>
-          <SidebarTrigger />
+    <header className='w-full'>
+      <div className='flex items-center justify-between px-3 py-3 border-b border-border/40 bg-card md:rounded-3xl md:px-6 md:py-5 md:border-none md:bg-transparent'>
+        <div className='flex items-center gap-3'>
+          <SidebarTrigger className='md:hidden' />
           <div>
-            <h1 className='text-3xl font-semibold tracking-tight'>{title}</h1>
+            <h1 className='text-2xl md:text-3xl font-semibold tracking-tight'>{title}</h1>
             <p className='text-sm text-muted-foreground mt-1'>{description}</p>
           </div>
         </div>
 
-        <div className='flex items-center gap-4'>
-          <NotificationBell />
+        <div className='flex items-center  '>
+          <div className='flex items-center justify-center rounded-full  bg-card p-2'>
+            <NotificationBell />
+          </div>
 
-          <div className='flex items-center gap-3'>
-            {!loading && profile && (
-              <>
-                <div className='text-right leading-tight'>
+          {!loading && profile && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className='flex items-center gap-3 rounded-full  px-3 py-2 bg-card cursor-pointer'>
+                  <div className='text-left leading-tight hidden md:block'>
+                    <p className='text-sm text-right font-semibold'>
+                      {profile.full_name || 'User'}
+                    </p>
+                    <p className='text-xs text-muted-foreground'>
+                      {profile.email || ''}
+                    </p>
+                  </div>
+                  <Avatar className='size-10'>
+                    <AvatarImage
+                      src={'/avatar-placeholder.png'}
+                      alt='User avatar'
+                    />
+                    <AvatarFallback>
+                      {profile.full_name
+                        ? profile.full_name
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')
+                            .toUpperCase()
+                            .slice(0, 2)
+                        : 'U'}
+                  </AvatarFallback>
+                  </Avatar>
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align='end' className='w-64 space-y-1'>
+                <div className='px-3 py-2'>
                   <p className='text-sm font-semibold'>
                     {profile.full_name || 'User'}
                   </p>
                   <p className='text-xs text-muted-foreground'>
                     {profile.email || ''}
                   </p>
+                  
+                  
                 </div>
-                <Avatar className='size-10'>
-                  <AvatarImage
-                    src={'/avatar-placeholder.png'}
-                    alt='User avatar'
-                  />
-                  <AvatarFallback>
-                    {profile.full_name
-                      ? profile.full_name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .toUpperCase()
-                          .slice(0, 2)
-                      : 'U'}
-                  </AvatarFallback>
-                </Avatar>
-              </>
-            )}
-          </div>
+                <DropdownMenuItem asChild>
+                  <Link href='/settings'>Go to Settings</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
     </header>

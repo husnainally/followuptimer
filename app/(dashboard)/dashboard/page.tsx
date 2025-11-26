@@ -21,6 +21,7 @@ import {
 import { RemindersTable } from '../reminders-table';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DashboardPage() {
   const [reminders, setReminders] = useState<any[]>([]);
@@ -70,8 +71,49 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className='flex items-center justify-center min-h-[400px]'>
-        <div className='text-muted-foreground'>Loading...</div>
+      <div className='flex flex-col gap-6 p-4 md:p-6 animate-[fadeIn_0.3s_ease-in-out_forwards]'>
+        {/* Stats Cards Skeleton */}
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className='relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-card'
+            >
+              <div className='relative flex flex-col gap-6 p-5'>
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center gap-3'>
+                    <Skeleton className='size-11 rounded-2xl' />
+                    <Skeleton className='h-4 w-32' />
+                  </div>
+                </div>
+                <Skeleton className='h-10 w-20' />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Reminders Table Card Skeleton */}
+        <Card className='bg-card'>
+          <CardHeader className='flex items-center justify-between bg-card'>
+            <div className='space-y-2'>
+              <Skeleton className='h-6 w-40' />
+              <Skeleton className='h-4 w-64' />
+            </div>
+            <Skeleton className='h-10 w-32' />
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className='flex items-center gap-4'>
+                <Skeleton className='h-12 w-12 rounded-lg' />
+                <div className='flex-1 space-y-2'>
+                  <Skeleton className='h-4 w-full' />
+                  <Skeleton className='h-4 w-3/4' />
+                </div>
+                <Skeleton className='h-8 w-20' />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -98,11 +140,42 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className='flex flex-col gap-6 p-6'>
+    <div className='flex flex-col gap-6  '>
       {/* Header Section */}
 
-      {/* Stats Cards */}
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+      {/* Mobile Stats Overview */}
+      <div className='md:hidden'>
+        <div className='rounded-3xl border border-border/70 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-sm'>
+          <div className='flex items-center justify-between mb-4'>
+            <div>
+              <p className='text-xs uppercase tracking-[0.2em] text-muted-foreground'>Snapshot</p>
+              <p className='text-sm text-muted-foreground'>Today&apos;s overview</p>
+            </div>
+            <div className='inline-flex items-center gap-1 rounded-full bg-white/70 px-3 py-1 text-xs text-primary'>
+              <span className='size-2 rounded-full bg-primary' />
+              Live
+            </div>
+          </div>
+          <div className='flex items-center justify-between gap-4'>
+            {statCards.map((card) => (
+              <div key={card.title} className='flex-1 flex flex-col gap-1'>
+                <div className='inline-flex size-9 items-center justify-center rounded-2xl bg-white/70 text-primary shadow-sm mb-1'>
+                  <card.icon className='h-4 w-4' />
+                </div>
+                <p className='text-xs text-muted-foreground'>{card.title}</p>
+                <p className='text-2xl font-semibold text-foreground'>
+                  {typeof card.value === "string"
+                    ? card.value
+                    : card.value}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Stats Cards */}
+      <div className='hidden md:grid grid-cols-1 md:grid-cols-3 gap-4'>
         {statCards.map((card) => (
           <StatCard
             key={card.title}
@@ -115,22 +188,20 @@ export default function DashboardPage() {
       </div>
 
       {/* Reminders Table Section */}
-      <Card className='bg-[#FAFAFA]'>
-        <CardHeader className='flex items-center justify-between bg-[#FAFAFA]'>
+      <Card className='bg-card'>
+        <CardHeader className='flex flex-col gap-3 bg-card sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <CardTitle>Your Reminders</CardTitle>
             <CardDescription>
               All your upcoming and past reminders
             </CardDescription>
           </div>
-          <div className='flex items-center justify-between'>
-            <Link href='/reminder/create'>
-              <Button className='gap-2 bg-primary hover:bg-primary/90'>
-                <Plus className='w-4 h-4' />
-                New Reminder
-              </Button>
-            </Link>
-          </div>
+          <Link href='/reminder/create' className='w-full sm:w-auto'>
+            <Button className='w-full gap-2 bg-primary hover:bg-primary/90 sm:w-auto'>
+              <Plus className='w-4 h-4' />
+              New Reminder
+            </Button>
+          </Link>
         </CardHeader>
         <CardContent>
           <RemindersTable reminders={reminders} onReminderDeleted={fetchData} />
@@ -149,9 +220,9 @@ type StatCardProps = {
 
 function StatCard({ title, description, value, icon: Icon }: StatCardProps) {
   return (
-    <div className='relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-[#FAFAFA]'>
-      {/* Decorative orange spot, top right only */}
-      <div className='pointer-events-none absolute top-0 right-0 w-32 h-20 rounded-full bg-[rgba(213,184,255,1)] blur-2xl opacity-70 -translate-y-1/3 translate-x-1/3' />
+    <div className='relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-card'>
+      {/* Decorative accent blue spot, top right only */}
+      <div className='pointer-events-none absolute top-0 right-0 w-32 h-20 rounded-full bg-primary blur-2xl opacity-70 -translate-y-1/3 translate-x-1/3' />
       <div className='relative flex flex-col gap-6 p-5'>
         <div className='flex items-center justify-between'>
           <div className='flex items-center gap-3'>
