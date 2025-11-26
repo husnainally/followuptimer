@@ -10,17 +10,17 @@ export default function LoginPage() {
   return (
     <AuthLayout
       title="Sign in to your account"
-      description="Welcome back! Please enter your details."
-      sideEyebrow="Relationship CRM"
+      description="Welcome back! Please enter your details to continue."
+      sideEyebrow="Productivity Tool"
       sideTitle={
         <>
-          Stay ahead of every <span className="italic font-semibold">follow-up</span>
+          Never miss a <span className="italic font-semibold">follow-up</span> again
         </>
       }
-      sideSubtitle="Streamline outreach and never let a conversation slip through the cracks again."
-      sideQuote='"FollowUpTimer helped us respond 2x faster and close more deals."'
-      sideQuoteAuthor="Aisha Khan"
-      sideQuoteRole="Revenue Operations Lead"
+      sideSubtitle="Effortless reminders, perfectly timed. Stay consistent and build better habits without the overwhelm."
+      sideQuote='"FollowUpTimer sits quietly in my workflow, supporting me in the background while I focus on what matters most."'
+      sideQuoteAuthor="Alex Rivera"
+      sideQuoteRole="Product Manager"
     >
       <LoginForm />
     </AuthLayout>
