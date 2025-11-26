@@ -9,7 +9,10 @@ import {
 
 import { Asterisk } from "lucide-react";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "./ui/form";
-import { Textarea, type TextareaProps } from "./ui/textarea";
+import { Textarea } from "./ui/textarea";
+import type { ComponentProps } from "react";
+
+type TextareaProps = ComponentProps<typeof Textarea>;
 
 type TControlledTextareaProps<T extends FieldValues> = {
   name: Path<T>;
