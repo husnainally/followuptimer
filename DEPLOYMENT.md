@@ -3,7 +3,7 @@
 ## Prerequisites
 
 1. **Vercel Account** - Sign up at [vercel.com](https://vercel.com) 
-2. **Supabase Project** - Database with tables and migrations applied
+2. **Supabase Project** - Database with tables and migrations applied  
 3. **Upstash QStash Account** - For scheduled reminders
 4. **Resend Account** - For email notifications
 
