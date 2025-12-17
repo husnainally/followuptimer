@@ -44,6 +44,9 @@ export async function POST(
         reminder_id: id,
         status: reminder.status,
       },
+      source: "app",
+      reminderId: id,
+      contactId: reminder.contact_id || undefined,
     });
 
     // Cancel QStash job if exists (only in production)

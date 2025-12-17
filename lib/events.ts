@@ -6,11 +6,19 @@ export type EventType =
   | "reminder_completed"
   | "reminder_snoozed"
   | "reminder_dismissed"
+  | "reminder_missed"
   | "popup_shown"
   | "popup_action"
   | "inactivity_detected"
   | "streak_achieved"
-  | "follow_up_required";
+  | "streak_incremented"
+  | "streak_broken"
+  | "follow_up_required"
+  | "email_opened"
+  | "linkedin_profile_viewed"
+  | "linkedin_message_sent";
+
+export type EventSource = "app" | "scheduler" | "extension_gmail" | "extension_linkedin";
 
 export interface EventData {
   reminder_id?: string;
@@ -18,6 +26,10 @@ export interface EventData {
   action?: string;
   duration_minutes?: number;
   streak_count?: number;
+  message_id?: string;
+  thread_id?: string;
+  profile_url?: string;
+  email_subject?: string;
   [key: string]: unknown;
 }
 
@@ -25,6 +37,9 @@ interface LogEventOptions {
   userId: string;
   eventType: EventType;
   eventData?: EventData;
+  source?: EventSource;
+  contactId?: string;
+  reminderId?: string;
   useServiceClient?: boolean;
 }
 
@@ -37,6 +52,9 @@ export async function logEvent({
   userId,
   eventType,
   eventData = {},
+  source = "app",
+  contactId,
+  reminderId,
   useServiceClient = false,
 }: LogEventOptions): Promise<{ success: boolean; eventId?: string; error?: string }> {
   try {
@@ -44,13 +62,24 @@ export async function logEvent({
       ? createServiceClient()
       : await createClient();
 
+    const insertData: Record<string, unknown> = {
+      user_id: userId,
+      event_type: eventType,
+      event_data: eventData,
+      source: source,
+    };
+
+    if (contactId) {
+      insertData.contact_id = contactId;
+    }
+
+    if (reminderId) {
+      insertData.reminder_id = reminderId;
+    }
+
     const { data, error } = await supabase
       .from("events")
-      .insert({
-        user_id: userId,
-        event_type: eventType,
-        event_data: eventData,
-      })
+      .insert(insertData)
       .select("id")
       .single();
 
@@ -64,6 +93,7 @@ export async function logEvent({
     console.error("Failed to log event:", {
       userId,
       eventType,
+      source,
       error: error instanceof Error ? error.message : "Unknown error",
     });
 
@@ -72,6 +102,32 @@ export async function logEvent({
       error: error instanceof Error ? error.message : "Unknown error",
     };
   }
+}
+
+/**
+ * Helper function to log extension events
+ */
+export async function logExtensionEvent({
+  userId,
+  eventType,
+  source,
+  eventData = {},
+  contactId,
+}: {
+  userId: string;
+  eventType: "email_opened" | "linkedin_profile_viewed" | "linkedin_message_sent";
+  source: "extension_gmail" | "extension_linkedin";
+  eventData?: EventData;
+  contactId?: string;
+}): Promise<{ success: boolean; eventId?: string; error?: string }> {
+  return logEvent({
+    userId,
+    eventType,
+    eventData,
+    source,
+    contactId,
+    useServiceClient: true,
+  });
 }
 
 /**

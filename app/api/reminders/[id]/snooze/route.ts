@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { rescheduleReminder } from "@/lib/qstash";
 import { logEvent } from "@/lib/events";
 import { logSnooze } from "@/lib/smart-snooze";
+import { processEventForTriggers } from "@/lib/trigger-manager";
 
 // Snooze a reminder by adding time to it
 export async function POST(
@@ -59,7 +60,7 @@ export async function POST(
     if (updateError) throw updateError;
 
     // Log reminder_snoozed event
-    await logEvent({
+    const eventResult = await logEvent({
       userId: user.id,
       eventType: "reminder_snoozed",
       eventData: {
@@ -67,8 +68,25 @@ export async function POST(
         duration_minutes: minutes,
         original_remind_at: reminder.remind_at,
         new_remind_at: newTime.toISOString(),
+        is_smart_suggestion: is_smart_suggestion,
       },
+      source: "app",
+      reminderId: id,
+      contactId: reminder.contact_id || undefined,
     });
+
+    // Process event for triggers (repeated snooze detection)
+    if (eventResult.success && eventResult.eventId) {
+      await processEventForTriggers(
+        user.id,
+        "reminder_snoozed",
+        eventResult.eventId,
+        {
+          reminder_id: id,
+          duration_minutes: minutes,
+        }
+      );
+    }
 
     // Log to snooze history
     await logSnooze(
