@@ -22,6 +22,8 @@ import { RemindersTable } from '../reminders-table';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AffirmationBar } from '@/components/affirmation-bar';
+import { QuickAddReminder } from '@/components/quick-add-reminder';
 
 export default function DashboardPage() {
   const [reminders, setReminders] = useState<any[]>([]);
@@ -186,6 +188,12 @@ export default function DashboardPage() {
           />
         ))}
       </div>
+
+      {/* Affirmation Bar */}
+      <AffirmationBar />
+
+      {/* Quick Add Reminder Bar */}
+      <QuickAddReminder onReminderCreated={fetchData} />
 
       {/* Reminders Table Section */}
       <Card className='bg-card'>

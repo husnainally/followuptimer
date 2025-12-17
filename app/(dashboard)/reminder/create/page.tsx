@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,10 +18,21 @@ import { Input } from "@/components/ui/input"
 import { format } from "date-fns"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+interface Contact {
+  id: string;
+  name: string;
+}
 
 export default function CreateReminderPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(
+    searchParams.get("contact_id")
+  )
   const initialDate = new Date(Date.now() + 60 * 60 * 1000)
 
   const form = useForm<ReminderFormData>({
@@ -31,11 +42,16 @@ export default function CreateReminderPage() {
       remind_at: initialDate,
       tone: "motivational",
       notification_method: "email",
+      affirmation_enabled: true,
     },
   })
 
   const [dateValue, setDateValue] = useState<Date>(initialDate)
   const [timeValue, setTimeValue] = useState<string>(format(initialDate, "HH:mm"))
+
+  useEffect(() => {
+    fetchContacts()
+  }, [])
 
   useEffect(() => {
     if (!dateValue || !timeValue) return
@@ -45,6 +61,18 @@ export default function CreateReminderPage() {
     form.setValue("remind_at", nextDate, { shouldValidate: true })
   }, [dateValue, timeValue, form])
 
+  async function fetchContacts() {
+    try {
+      const response = await fetch("/api/contacts")
+      if (response.ok) {
+        const data = await response.json()
+        setContacts(data.contacts || [])
+      }
+    } catch (error) {
+      console.error("Failed to fetch contacts:", error)
+    }
+  }
+
   const onSubmit = async (data: ReminderFormData) => {
     setIsLoading(true)
     const toastId = toast.loading("Creating reminder...")
@@ -52,6 +80,7 @@ export default function CreateReminderPage() {
       const payload = {
         ...data,
         remind_at: data.remind_at instanceof Date ? data.remind_at.toISOString() : data.remind_at,
+        contact_id: selectedContactId || null,
       }
 
       const response = await fetch("/api/reminders", {
@@ -161,8 +190,8 @@ export default function CreateReminderPage() {
                 <label className="block text-sm font-medium mb-3">
                   Affirmation Tone <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(["motivational", "professional", "playful"] as const).map((tone) => (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {(["motivational", "professional", "playful", "simple"] as const).map((tone) => (
                     <button
                       key={tone}
                       type="button"
@@ -177,6 +206,48 @@ export default function CreateReminderPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Contact Selection */}
+              {contacts.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="contact">Link to Contact (Optional)</Label>
+                  <Select
+                    value={selectedContactId || ""}
+                    onValueChange={(value) => setSelectedContactId(value || null)}
+                  >
+                    <SelectTrigger id="contact">
+                      <SelectValue placeholder="Select a contact (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {contacts.map((contact) => (
+                        <SelectItem key={contact.id} value={contact.id}>
+                          {contact.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Link this reminder to a contact to track follow-ups
+                  </p>
+                </div>
+              )}
+
+              {/* Affirmation Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
+                <div>
+                  <label className="block text-sm font-medium">Include Affirmation</label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Add a motivational message with your reminder
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={form.watch("affirmation_enabled") ?? true}
+                  onChange={(e) => form.setValue("affirmation_enabled", e.target.checked)}
+                  className="h-5 w-5 rounded border-border"
+                />
               </div>
 
               {/* Actions */}

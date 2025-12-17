@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { cancelScheduledReminder } from '@/lib/qstash';
+import { logEvent } from '@/lib/events';
 
 // Dismiss a reminder
 export async function POST(
@@ -34,6 +35,16 @@ export async function POST(
         { status: 404 }
       );
     }
+
+    // Log reminder_dismissed event
+    await logEvent({
+      userId: user.id,
+      eventType: 'reminder_dismissed',
+      eventData: {
+        reminder_id: id,
+        status: reminder.status,
+      },
+    });
 
     // Cancel QStash job if exists (only in production)
     if (reminder.qstash_message_id && process.env.QSTASH_TOKEN) {

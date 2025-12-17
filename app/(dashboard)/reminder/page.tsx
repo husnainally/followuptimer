@@ -30,17 +30,28 @@ export default function RemindersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [toneFilter, setToneFilter] = useState("all")
   const [methodFilter, setMethodFilter] = useState("all")
+  const [categoryTab, setCategoryTab] = useState<"all" | "overdue" | "today" | "upcoming" | "completed">("all")
   const [statusTab, setStatusTab] = useState("all")
   const [page, setPage] = useState(1)
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const pageSize = 10
   const hasFilters =
-    searchTerm.trim() !== "" || toneFilter !== "all" || methodFilter !== "all" || statusTab !== "all"
+    searchTerm.trim() !== "" || toneFilter !== "all" || methodFilter !== "all" || statusTab !== "all" || categoryTab !== "all"
+  
+  // Category tabs for better organization
+  const categoryTabs = [
+    { key: "all" as const, label: "All Reminders" },
+    { key: "overdue" as const, label: "Overdue" },
+    { key: "today" as const, label: "Today" },
+    { key: "upcoming" as const, label: "Upcoming" },
+    { key: "completed" as const, label: "Completed" },
+  ]
+
   const statusTabs = useMemo(() => {
     const statuses = Array.from(new Set(reminders.map((reminder) => reminder.status).filter(Boolean)))
     return [
-      { key: "all", label: "All Reminders" },
+      { key: "all", label: "All Statuses" },
       ...statuses.map((status) => ({
         key: status,
         label: formatStatusLabel(status),
@@ -99,19 +110,37 @@ export default function RemindersPage() {
 
   const filteredReminders = useMemo(() => {
     const searchValue = searchTerm.toLowerCase().trim()
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const todayEnd = new Date(todayStart)
+    todayEnd.setDate(todayEnd.getDate() + 1)
+
     return reminders.filter((reminder) => {
       const message = reminder.message?.toLowerCase() ?? ""
       const tone = reminder.tone?.toLowerCase() ?? ""
       const method = reminder.notification_method ?? ""
+      const remindAt = new Date(reminder.remind_at)
 
       const matchesSearch = searchValue === "" || message.includes(searchValue) || tone.includes(searchValue)
       const matchesTone = toneFilter === "all" || reminder.tone === toneFilter
       const matchesMethod = methodFilter === "all" || method === methodFilter
       const matchesStatus = statusTab === "all" || reminder.status === statusTab
 
-      return matchesSearch && matchesTone && matchesMethod && matchesStatus
+      // Category filtering
+      let matchesCategory = true
+      if (categoryTab === "overdue") {
+        matchesCategory = remindAt < now && reminder.status === "pending"
+      } else if (categoryTab === "today") {
+        matchesCategory = remindAt >= todayStart && remindAt < todayEnd && reminder.status === "pending"
+      } else if (categoryTab === "upcoming") {
+        matchesCategory = remindAt >= todayEnd && reminder.status === "pending"
+      } else if (categoryTab === "completed") {
+        matchesCategory = reminder.status === "sent" || reminder.status === "completed"
+      }
+
+      return matchesSearch && matchesTone && matchesMethod && matchesStatus && matchesCategory
     })
-  }, [reminders, searchTerm, toneFilter, methodFilter, statusTab])
+  }, [reminders, searchTerm, toneFilter, methodFilter, statusTab, categoryTab])
 
   const totalPages = Math.max(1, Math.ceil(filteredReminders.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -130,6 +159,7 @@ export default function RemindersPage() {
     setToneFilter("all")
     setMethodFilter("all")
     setStatusTab("all")
+    setCategoryTab("all")
     resetPage()
   }
 
@@ -284,14 +314,36 @@ export default function RemindersPage() {
             )}
           </div>
 
+          {/* Category Tabs */}
           <div className="flex flex-wrap gap-2 rounded-full w-fit border border-border/70 bg-muted/30 p-1">
-            {statusTabs.map((tab) => {
-              const isActive = statusTab === tab.key
+            {categoryTabs.map((tab) => {
+              const isActive = categoryTab === tab.key
+              const count = tab.key === "all" 
+                ? reminders.length 
+                : tab.key === "overdue"
+                ? reminders.filter(r => new Date(r.remind_at) < new Date() && r.status === "pending").length
+                : tab.key === "today"
+                ? reminders.filter(r => {
+                    const todayStart = new Date()
+                    todayStart.setHours(0, 0, 0, 0)
+                    const todayEnd = new Date(todayStart)
+                    todayEnd.setDate(todayEnd.getDate() + 1)
+                    const remindAt = new Date(r.remind_at)
+                    return remindAt >= todayStart && remindAt < todayEnd && r.status === "pending"
+                  }).length
+                : tab.key === "upcoming"
+                ? reminders.filter(r => {
+                    const todayEnd = new Date()
+                    todayEnd.setHours(23, 59, 59, 999)
+                    return new Date(r.remind_at) > todayEnd && r.status === "pending"
+                  }).length
+                : reminders.filter(r => r.status === "sent" || r.status === "completed").length
+              
               return (
                 <button
                   key={tab.key}
                   onClick={() => {
-                    setStatusTab(tab.key)
+                    setCategoryTab(tab.key)
                     resetPage()
                   }}
                   className={cn(
@@ -300,8 +352,13 @@ export default function RemindersPage() {
                   )}
                 >
                   {tab.label}
-                  {tab.key === "all" && (
-                    <Badge className="bg-primary/10 text-primary border-0">{reminders.length}</Badge>
+                  {count > 0 && (
+                    <Badge className={cn(
+                      "border-0",
+                      isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                    )}>
+                      {count}
+                    </Badge>
                   )}
                 </button>
               )

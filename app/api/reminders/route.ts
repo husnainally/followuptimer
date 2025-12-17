@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { scheduleReminder } from "@/lib/qstash";
+import { logEvent } from "@/lib/events";
 
 export async function GET() {
   try {
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { message, remind_at, tone, notification_method } = body;
+    const { message, remind_at, tone, notification_method, affirmation_enabled, contact_id } = body;
 
     // Validate required fields
     if (!message || !remind_at) {
@@ -64,11 +65,25 @@ export async function POST(request: Request) {
         tone: tone || "motivational",
         notification_method: notification_method || "email",
         status: "pending",
+        affirmation_enabled: affirmation_enabled !== undefined ? affirmation_enabled : true,
+        contact_id: contact_id || null,
       })
       .select()
       .single();
 
     if (error) throw error;
+
+    // Log reminder_created event
+    await logEvent({
+      userId: user.id,
+      eventType: "reminder_created",
+      eventData: {
+        reminder_id: reminder.id,
+        tone: reminder.tone,
+        notification_method: reminder.notification_method,
+        remind_at: reminder.remind_at,
+      },
+    });
 
     // Schedule QStash job (if QSTASH_TOKEN is configured)
     // In local development, use localhost URL; otherwise use configured app URL
