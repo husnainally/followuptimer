@@ -88,13 +88,37 @@ export async function POST(
         .eq("id", popup.reminder_id);
 
       // Log reminder_completed event
-      await logEvent({
+      const { data: reminder } = await supabase
+        .from("reminders")
+        .select("contact_id")
+        .eq("id", popup.reminder_id)
+        .single();
+
+      const eventResult = await logEvent({
         userId: user.id,
         eventType: "reminder_completed",
         eventData: {
           reminder_id: popup.reminder_id,
         },
+        source: "app",
+        reminderId: popup.reminder_id,
+        contactId: reminder?.contact_id || undefined,
       });
+
+      // Update streak tracking (which will create streak_incremented trigger if needed)
+      if (eventResult.success && popup.reminder_id) {
+        const { updateStreakOnCompletion } = await import("@/lib/streak-tracking");
+        await updateStreakOnCompletion(user.id, popup.reminder_id);
+        
+        // Also process the reminder_completed event for any other triggers
+        const { processEventForTriggers } = await import("@/lib/trigger-manager");
+        await processEventForTriggers(
+          user.id,
+          "reminder_completed",
+          eventResult.eventId!,
+          { reminder_id: popup.reminder_id }
+        );
+      }
     } else if (action_type === "snooze" && popup.reminder_id) {
       // Trigger snooze API
       const snoozeMinutes = action_data?.minutes || 10;

@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { event_type, event_data } = body;
+    const { event_type, event_data, source, contact_id, reminder_id } = body;
 
     if (!event_type) {
       return NextResponse.json(
@@ -24,11 +24,69 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate event_type
+    const validEventTypes: EventType[] = [
+      "reminder_created",
+      "reminder_completed",
+      "reminder_snoozed",
+      "reminder_dismissed",
+      "reminder_missed",
+      "popup_shown",
+      "popup_action",
+      "inactivity_detected",
+      "streak_achieved",
+      "streak_incremented",
+      "streak_broken",
+      "follow_up_required",
+      "email_opened",
+      "linkedin_profile_viewed",
+      "linkedin_message_sent",
+    ];
+
+    if (!validEventTypes.includes(event_type as EventType)) {
+      return NextResponse.json(
+        { error: `Invalid event_type. Must be one of: ${validEventTypes.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate source
+    const validSources = ["app", "scheduler", "extension_gmail", "extension_linkedin"];
+    const eventSource = source || "app";
+    if (!validSources.includes(eventSource)) {
+      return NextResponse.json(
+        { error: `Invalid source. Must be one of: ${validSources.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate payload structure based on event type (basic validation)
+    if (event_data && typeof event_data !== "object") {
+      return NextResponse.json(
+        { error: "event_data must be an object" },
+        { status: 400 }
+      );
+    }
+
     const result = await logEvent({
       userId: user.id,
       eventType: event_type as EventType,
       eventData: (event_data || {}) as EventData,
+      source: eventSource as "app" | "scheduler" | "extension_gmail" | "extension_linkedin",
+      contactId: contact_id || undefined,
+      reminderId: reminder_id || undefined,
     });
+
+    // Process event for triggers if successful
+    if (result.success && result.eventId) {
+      const { processEventForTriggers } = await import("@/lib/trigger-manager");
+      await processEventForTriggers(
+        user.id,
+        event_type as EventType,
+        result.eventId,
+        event_data || {}
+      );
+    }
 
     if (!result.success) {
       return NextResponse.json(

@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     if (error) throw error;
 
     // Log reminder_created event
-    await logEvent({
+    const eventResult = await logEvent({
       userId: user.id,
       eventType: "reminder_created",
       eventData: {
@@ -83,7 +83,21 @@ export async function POST(request: Request) {
         notification_method: reminder.notification_method,
         remind_at: reminder.remind_at,
       },
+      source: "app",
+      reminderId: reminder.id,
+      contactId: body.contact_id || undefined,
     });
+
+    // Process event for triggers (reminder_created doesn't create triggers, but process for consistency)
+    if (eventResult.success && eventResult.eventId) {
+      const { processEventForTriggers } = await import("@/lib/trigger-manager");
+      await processEventForTriggers(
+        user.id,
+        "reminder_created",
+        eventResult.eventId,
+        { reminder_id: reminder.id }
+      );
+    }
 
     // Schedule QStash job (if QSTASH_TOKEN is configured)
     // In local development, use localhost URL; otherwise use configured app URL

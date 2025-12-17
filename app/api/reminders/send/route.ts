@@ -335,6 +335,38 @@ async function handler(request: Request) {
       .update({ status: overallSuccess ? "sent" : "failed" })
       .eq("id", reminderId);
 
+    // Log reminder_completed event when reminder is successfully sent
+    if (overallSuccess) {
+      const { logEvent } = await import("@/lib/events");
+      const eventResult = await logEvent({
+        userId: reminder.user_id,
+        eventType: "reminder_completed",
+        eventData: {
+          reminder_id: reminderId,
+          notification_method: reminder.notification_method,
+        },
+        source: "scheduler",
+        reminderId: reminderId,
+        contactId: reminder.contact_id || undefined,
+        useServiceClient: true,
+      });
+
+      // Update streak tracking (which will create streak_incremented trigger if needed)
+      if (eventResult.success) {
+        const { updateStreakOnCompletion } = await import("@/lib/streak-tracking");
+        await updateStreakOnCompletion(reminder.user_id, reminderId);
+        
+        // Also process the reminder_completed event for any other triggers
+        const { processEventForTriggers } = await import("@/lib/trigger-manager");
+        await processEventForTriggers(
+          reminder.user_id,
+          "reminder_completed",
+          eventResult.eventId!,
+          { reminder_id: reminderId }
+        );
+      }
+    }
+
     if (!isProduction) {
       console.log("[Webhook] Reminder status updated:", {
         status: overallSuccess ? "sent" : "failed",
