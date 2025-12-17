@@ -62,8 +62,25 @@ alter table public.events
 add column if not exists source text default 'app' not null;
 
 -- Add contact_id column to events table (nullable, foreign key)
+-- Note: contacts table must exist (migration 20241201000006_phase2_contacts.sql)
+-- If contacts table doesn't exist yet, this will fail - run contacts migration first
 alter table public.events
-add column if not exists contact_id uuid references public.contacts(id) on delete set null;
+add column if not exists contact_id uuid;
+-- Add foreign key constraint only if contacts table exists and constraint doesn't exist
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'contacts') then
+    if not exists (
+      select 1 from information_schema.table_constraints 
+      where constraint_schema = 'public' 
+      and constraint_name = 'events_contact_id_fkey'
+      and table_name = 'events'
+    ) then
+      alter table public.events
+      add constraint events_contact_id_fkey foreign key (contact_id) references public.contacts(id) on delete set null;
+    end if;
+  end if;
+end $$;
 
 -- Add reminder_id column to events table (nullable, foreign key)
 alter table public.events
