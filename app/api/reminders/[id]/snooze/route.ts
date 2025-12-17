@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { rescheduleReminder } from "@/lib/qstash";
+import { logEvent } from "@/lib/events";
+import { logSnooze } from "@/lib/smart-snooze";
 
 // Snooze a reminder by adding time to it
 export async function POST(
@@ -19,7 +21,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { minutes = 10 } = body; // Default to 10 minutes snooze
+    const { minutes = 10, is_smart_suggestion = false } = body; // Default to 10 minutes snooze
 
     // Get current reminder
     const { data: reminder, error: fetchError } = await supabase
@@ -55,6 +57,26 @@ export async function POST(
       .single();
 
     if (updateError) throw updateError;
+
+    // Log reminder_snoozed event
+    await logEvent({
+      userId: user.id,
+      eventType: "reminder_snoozed",
+      eventData: {
+        reminder_id: id,
+        duration_minutes: minutes,
+        original_remind_at: reminder.remind_at,
+        new_remind_at: newTime.toISOString(),
+      },
+    });
+
+    // Log to snooze history
+    await logSnooze(
+      user.id,
+      id,
+      minutes,
+      is_smart_suggestion ? "smart_suggestion" : "user_action"
+    );
 
     // Reschedule QStash job (works in local and production)
     const isLocalDev = process.env.NODE_ENV === "development";

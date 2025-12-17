@@ -11,7 +11,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, Bell, Settings, LogOut, History } from 'lucide-react';
+import { LayoutDashboard, Bell, Settings, LogOut, History, Users } from 'lucide-react';
 import { logout } from '@/lib/supabase/logout';
 import Image from 'next/image';
 
@@ -33,6 +33,11 @@ export function DashboardSidebar() {
       title: "Notifications",
       href: "/notifications",
       icon: History,
+    },
+    {
+      title: 'Contacts',
+      href: '/contacts',
+      icon: Users,
     },
     {
       title: 'Settings',

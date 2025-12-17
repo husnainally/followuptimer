@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { ControlledSwitch } from "@/components/controlled-switch";
 import { Check, AlertCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
@@ -19,6 +21,14 @@ const notificationSettingsSchema = z.object({
   pushNotifications: z.boolean().default(true),
   reminderAlerts: z.boolean().default(true),
   weeklyDigest: z.boolean().default(false),
+  digestPreferences: z.object({
+    enabled: z.boolean(),
+    day_of_week: z.number().min(0).max(6),
+    time: z.string(),
+    format: z.string(),
+  }).optional(),
+  affirmationFrequency: z.enum(['rare', 'balanced', 'frequent']).default('balanced'),
+  smartSnooze: z.boolean().default(false),
 });
 
 export function NotificationSettings() {
@@ -33,6 +43,14 @@ export function NotificationSettings() {
       pushNotifications: true,
       reminderAlerts: true,
       weeklyDigest: false,
+      digestPreferences: {
+        enabled: false,
+        day_of_week: 1,
+        time: "09:00",
+        format: "html",
+      },
+      affirmationFrequency: 'balanced',
+      smartSnooze: false,
     },
   });
 
@@ -52,17 +70,26 @@ export function NotificationSettings() {
         const { data: profile } = await supabase
           .from("profiles")
           .select(
-            "email_notifications, push_notifications, reminder_before_minutes"
+            "email_notifications, push_notifications, reminder_before_minutes, affirmation_frequency, smart_snooze_enabled, digest_preferences"
           )
           .eq("id", user.id)
           .single();
 
         if (profile) {
+          const digestPrefs = (profile.digest_preferences as Record<string, unknown>) || {};
           form.reset({
             emailNotifications: profile.email_notifications ?? true,
             pushNotifications: profile.push_notifications ?? false,
             reminderAlerts: true,
-            weeklyDigest: false,
+            weeklyDigest: digestPrefs.enabled === true,
+            digestPreferences: {
+              enabled: digestPrefs.enabled === true,
+              day_of_week: (digestPrefs.day_of_week as number) ?? 1,
+              time: (digestPrefs.time as string) ?? "09:00",
+              format: (digestPrefs.format as string) ?? "html",
+            },
+            affirmationFrequency: (profile.affirmation_frequency || 'balanced') as 'rare' | 'balanced' | 'frequent',
+            smartSnooze: profile.smart_snooze_enabled ?? false,
           });
         }
       }
@@ -87,11 +114,23 @@ export function NotificationSettings() {
       }
 
       // Update notification preferences
+      const digestPrefs = data.weeklyDigest
+        ? {
+            enabled: true,
+            day_of_week: data.digestPreferences?.day_of_week ?? 1,
+            time: data.digestPreferences?.time ?? "09:00",
+            format: data.digestPreferences?.format ?? "html",
+          }
+        : { enabled: false, day_of_week: 1, time: "09:00", format: "html" };
+
       const { error } = await supabase
         .from("profiles")
         .update({
           email_notifications: data.emailNotifications,
           push_notifications: data.pushNotifications,
+          affirmation_frequency: data.affirmationFrequency,
+          smart_snooze_enabled: data.smartSnooze,
+          digest_preferences: digestPrefs,
         })
         .eq("id", user.id);
 
@@ -225,11 +264,67 @@ export function NotificationSettings() {
               label="Reminder Alerts"
               description="Get alerted when a reminder is due"
             />
+            <div className="space-y-2">
+              <ControlledSwitch
+                control={form.control}
+                name="weeklyDigest"
+                label="Weekly Digest"
+                description="Receive a weekly summary of your activity"
+              />
+              {form.watch("weeklyDigest") && (
+                <div className="ml-6 space-y-2">
+                  <Label htmlFor="digest-day">Day of Week</Label>
+                  <Select
+                    id="digest-day"
+                    defaultValue="1"
+                    onValueChange={(value) => {
+                      const prefs = form.getValues("digestPreferences") || {};
+                      form.setValue("digestPreferences", {
+                        ...prefs,
+                        day_of_week: parseInt(value),
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sunday</SelectItem>
+                      <SelectItem value="1">Monday</SelectItem>
+                      <SelectItem value="2">Tuesday</SelectItem>
+                      <SelectItem value="3">Wednesday</SelectItem>
+                      <SelectItem value="4">Thursday</SelectItem>
+                      <SelectItem value="5">Friday</SelectItem>
+                      <SelectItem value="6">Saturday</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="affirmation-frequency">Affirmation Frequency</Label>
+              <Select
+                value={form.watch("affirmationFrequency")}
+                onValueChange={(value) => form.setValue("affirmationFrequency", value as 'rare' | 'balanced' | 'frequent')}
+              >
+                <SelectTrigger id="affirmation-frequency">
+                  <SelectValue placeholder="Select frequency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rare">Rare - Once per day</SelectItem>
+                  <SelectItem value="balanced">Balanced - Every 4 hours</SelectItem>
+                  <SelectItem value="frequent">Frequent - Every hour</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                How often affirmations appear in your dashboard
+              </p>
+            </div>
             <ControlledSwitch
               control={form.control}
-              name="weeklyDigest"
-              label="Weekly Digest"
-              description="Receive a weekly summary of your activity"
+              name="smartSnooze"
+              label="Smart Snooze"
+              description="Get intelligent snooze duration suggestions based on your patterns"
             />
             <div className="flex justify-end pt-4">
               {saveSuccess && (

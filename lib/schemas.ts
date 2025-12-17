@@ -78,12 +78,13 @@ export const reminderSchema = z.object({
   remind_at: z
     .date()
     .refine((date) => date > new Date(), 'Reminder time must be in the future'),
-  tone: z.enum(['motivational', 'professional', 'playful'], {
+  tone: z.enum(['motivational', 'professional', 'playful', 'simple'], {
     message: 'Please select a tone',
   }),
   notification_method: z.enum(['email', 'push', 'in_app'], {
     message: 'Please select a notification method',
   }),
+  affirmation_enabled: z.boolean().optional().default(true),
 });
 
 export type ReminderFormData = z.infer<typeof reminderSchema>;
