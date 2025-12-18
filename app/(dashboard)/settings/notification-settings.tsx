@@ -275,17 +275,22 @@ export function NotificationSettings() {
                 <div className="ml-6 space-y-2">
                   <Label htmlFor="digest-day">Day of Week</Label>
                   <Select
-                    id="digest-day"
                     defaultValue="1"
                     onValueChange={(value) => {
-                      const prefs = form.getValues("digestPreferences") || {};
+                      const prefs =
+                        form.getValues("digestPreferences") || {
+                          enabled: true,
+                          day_of_week: 1,
+                          time: "09:00",
+                          format: "email",
+                        };
                       form.setValue("digestPreferences", {
                         ...prefs,
                         day_of_week: parseInt(value),
                       });
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="digest-day">
                       <SelectValue placeholder="Select day" />
                     </SelectTrigger>
                     <SelectContent>

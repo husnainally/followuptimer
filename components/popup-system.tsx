@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Popup, type PopupTemplateType } from "@/components/ui/popup";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
 interface PopupData {
@@ -12,12 +11,15 @@ interface PopupData {
   message: string;
   affirmation?: string;
   reminder_id?: string;
+  contact_id?: string;
   action_data?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
 }
 
 export function PopupSystem() {
   const [currentPopup, setCurrentPopup] = useState<PopupData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [uiState, setUiState] = useState<"entering" | "visible" | "exiting">("entering");
 
   useEffect(() => {
     fetchNextPopup();
@@ -32,10 +34,11 @@ export function PopupSystem() {
       if (!response.ok) return;
 
       const data = await response.json();
-      if (data.popup && data.popup.status === "pending") {
+      if (data.popup && ["queued", "pending", "displayed", "shown"].includes(data.popup.status)) {
         setCurrentPopup(data.popup);
-        // Mark as shown
-        await markPopupAsShown(data.popup.id);
+        setUiState("entering");
+        // let the browser paint, then settle to visible for smooth transitions
+        requestAnimationFrame(() => setUiState("visible"));
       }
     } catch (error) {
       // Silently fail - popups are non-critical
@@ -43,25 +46,11 @@ export function PopupSystem() {
     }
   }
 
-  async function markPopupAsShown(popupId: string) {
-    try {
-      const supabase = createClient();
-      await supabase
-        .from("popups")
-        .update({
-          status: "shown",
-          shown_at: new Date().toISOString(),
-        })
-        .eq("id", popupId);
-    } catch (error) {
-      console.error("Failed to mark popup as shown:", error);
-    }
-  }
-
   async function handleAction(
     popupId: string,
-    actionType: "complete" | "snooze" | "follow_up",
-    actionData?: Record<string, unknown>
+    actionType: "FOLLOW_UP_NOW" | "SNOOZE" | "MARK_DONE",
+    actionData?: Record<string, unknown>,
+    snoozeUntil?: string
   ) {
     setIsLoading(true);
     try {
@@ -71,6 +60,7 @@ export function PopupSystem() {
         body: JSON.stringify({
           action_type: actionType,
           action_data: actionData || {},
+          snooze_until: snoozeUntil,
         }),
       });
 
@@ -78,10 +68,26 @@ export function PopupSystem() {
         throw new Error("Failed to handle action");
       }
 
-      toast.success("Action completed");
-      setCurrentPopup(null);
-      // Fetch next popup after a short delay
-      setTimeout(fetchNextPopup, 1000);
+      const result = await response.json().catch(() => ({}));
+      if (actionType === "FOLLOW_UP_NOW") {
+        const url = result?.action_url as string | null | undefined;
+        if (url && typeof window !== "undefined") {
+          window.open(url, "_blank", "noopener,noreferrer");
+        } else if (currentPopup?.reminder_id) {
+          window.location.href = `/reminder/${currentPopup.reminder_id}`;
+        } else if (currentPopup?.contact_id) {
+          window.location.href = `/contacts/${currentPopup.contact_id}`;
+        } else {
+          window.location.href = `/dashboard`;
+        }
+      }
+
+      toast.success("Done");
+      setUiState("exiting");
+      setTimeout(() => {
+        setCurrentPopup(null);
+        fetchNextPopup();
+      }, 220);
     } catch (error) {
       toast.error("Failed to complete action");
       console.error("Failed to handle popup action:", error);
@@ -101,9 +107,11 @@ export function PopupSystem() {
         throw new Error("Failed to dismiss popup");
       }
 
-      setCurrentPopup(null);
-      // Fetch next popup after a short delay
-      setTimeout(fetchNextPopup, 1000);
+      setUiState("exiting");
+      setTimeout(() => {
+        setCurrentPopup(null);
+        fetchNextPopup();
+      }, 220);
     } catch (error) {
       toast.error("Failed to dismiss popup");
       console.error("Failed to dismiss popup:", error);
@@ -114,43 +122,57 @@ export function PopupSystem() {
 
   if (!currentPopup) return null;
 
+  const snoozeOptions = [
+    { label: "Snooze 1h", minutes: 60 },
+    { label: "Tomorrow", minutes: 60 * 24 },
+    { label: "Next week", minutes: 60 * 24 * 7 },
+  ];
+
   return (
-    <div className="fixed bottom-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-4">
+    <div
+      className={[
+        "fixed bottom-4 right-4 z-50",
+        "transition-all duration-200 ease-out motion-reduce:transition-none",
+        uiState === "entering" ? "opacity-0 translate-y-2" : "",
+        uiState === "visible" ? "opacity-100 translate-y-0" : "",
+        uiState === "exiting" ? "opacity-0 translate-y-2" : "",
+      ].join(" ")}
+    >
       <Popup
         id={currentPopup.id}
         templateType={currentPopup.template_type}
         title={currentPopup.title}
         message={currentPopup.message}
         affirmation={currentPopup.affirmation}
-        onComplete={
-          currentPopup.template_type === "success" ||
-          currentPopup.template_type === "follow_up_required"
-            ? () =>
-                handleAction(
-                  currentPopup.id,
-                  "complete",
-                  currentPopup.action_data
-                )
-            : undefined
+        isLoading={isLoading}
+        onFollowUpNow={() =>
+          handleAction(currentPopup.id, "FOLLOW_UP_NOW", {
+            ...(currentPopup.action_data || {}),
+            ...(currentPopup.payload || {}),
+          })
         }
         onSnooze={
           currentPopup.reminder_id
-            ? () =>
-                handleAction(currentPopup.id, "snooze", {
-                  minutes: 10,
-                  reminder_id: currentPopup.reminder_id,
-                })
+            ? (minutes) =>
+                handleAction(
+                  currentPopup.id,
+                  "SNOOZE",
+                  { minutes, reminder_id: currentPopup.reminder_id },
+                  new Date(Date.now() + minutes * 60 * 1000).toISOString()
+                )
             : undefined
         }
-        onFollowUp={
-          currentPopup.template_type === "follow_up_required"
+        snoozeOptions={currentPopup.reminder_id ? snoozeOptions : undefined}
+        onMarkDone={
+          currentPopup.reminder_id
             ? () =>
                 handleAction(
                   currentPopup.id,
-                  "follow_up",
-                  currentPopup.action_data
+                  "MARK_DONE",
+                  { reminder_id: currentPopup.reminder_id },
+                  undefined
                 )
-            : undefined
+            : () => handleAction(currentPopup.id, "MARK_DONE", currentPopup.action_data)
         }
         onDismiss={() => handleDismiss(currentPopup.id)}
       />

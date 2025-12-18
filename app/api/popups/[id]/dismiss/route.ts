@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { logEvent } from "@/lib/events";
 
 // POST /api/popups/[id]/dismiss - Dismiss popup
 export async function POST(
@@ -38,12 +39,28 @@ export async function POST(
       .update({
         status: "dismissed",
         dismissed_at: new Date().toISOString(),
+        closed_at: new Date().toISOString(),
+        action_taken: "DISMISS",
       })
       .eq("id", id)
       .select()
       .single();
 
     if (updateError) throw updateError;
+
+    await logEvent({
+      userId: user.id,
+      eventType: "popup_dismissed",
+      eventData: {
+        popup_id: id,
+        rule_id: updatedPopup.rule_id || undefined,
+        source_event_id: updatedPopup.source_event_id || undefined,
+      },
+      source: "app",
+      contactId: updatedPopup.contact_id || undefined,
+      reminderId: updatedPopup.reminder_id || undefined,
+      useServiceClient: true,
+    });
 
     return NextResponse.json({
       success: true,

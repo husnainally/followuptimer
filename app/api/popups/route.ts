@@ -1,6 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getNextPopup, createPopup, type PopupTemplateType } from "@/lib/popup-trigger";
+import { logEvent } from "@/lib/events";
+
+function getStringFromUnknown(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+
+function getStringFromRecord(obj: unknown, key: string): string | undefined {
+  if (!obj || typeof obj !== "object") return undefined;
+  return getStringFromUnknown((obj as Record<string, unknown>)[key]);
+}
 
 // GET /api/popups - Get pending popups for user
 export async function GET() {
@@ -21,6 +31,30 @@ export async function GET() {
         { error: result.error || "Failed to get popup" },
         { status: 500 }
       );
+    }
+
+    // Log lifecycle: POPUP_SHOWN when we transition to displayed
+    if (result.popup && result.didTransition) {
+      const popupId = typeof result.popup.id === "string" ? result.popup.id : null;
+      await logEvent({
+        userId: user.id,
+        eventType: "popup_shown",
+        eventData: {
+          popup_id: popupId || undefined,
+          rule_id: typeof result.popup.rule_id === "string" ? result.popup.rule_id : undefined,
+          source_event_id:
+            typeof result.popup.source_event_id === "string"
+              ? result.popup.source_event_id
+              : undefined,
+          template_key:
+            getStringFromRecord((result.popup as Record<string, unknown>).payload, "template_key"),
+        },
+        source: "app",
+        contactId: typeof result.popup.contact_id === "string" ? result.popup.contact_id : undefined,
+        reminderId:
+          typeof result.popup.reminder_id === "string" ? result.popup.reminder_id : undefined,
+        useServiceClient: true,
+      });
     }
 
     return NextResponse.json({

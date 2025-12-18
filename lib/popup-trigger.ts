@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { logEvent, type EventType } from "@/lib/events";
+import { type EventType } from "@/lib/events";
 
 export type PopupTemplateType = "success" | "streak" | "inactivity" | "follow_up_required";
 
@@ -46,25 +46,14 @@ export async function createPopup({
         message,
         affirmation,
         priority: Math.max(1, Math.min(10, priority)), // Clamp between 1-10
-        status: "pending",
+        status: "queued",
         action_data: actionData,
+        queued_at: new Date().toISOString(),
       })
       .select("id")
       .single();
 
     if (error) throw error;
-
-    // Log popup creation event
-    await logEvent({
-      userId,
-      eventType: "popup_shown",
-      eventData: {
-        popup_id: data.id,
-        template_type: templateType,
-        reminder_id: reminderId,
-      },
-      useServiceClient: true,
-    });
 
     return {
       success: true,
@@ -196,17 +185,34 @@ async function applyDefaultTriggers(
 /**
  * Get next pending popup for user (highest priority first)
  */
-export async function getNextPopup(userId: string) {
+export async function getNextPopup(
+  userId: string
+): Promise<{
+  success: boolean;
+  popup: Record<string, unknown> | null;
+  didTransition?: boolean;
+  error?: string;
+}> {
   try {
     const supabase = createServiceClient();
+
+    // Mark expired queued popups (best-effort)
+    await supabase
+      .from("popups")
+      .update({ status: "expired", closed_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .in("status", ["queued", "pending"])
+      .lt("expires_at", new Date().toISOString());
 
     const { data, error } = await supabase
       .from("popups")
       .select("*")
       .eq("user_id", userId)
-      .eq("status", "pending")
+      .in("status", ["queued", "pending"])
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .or(`snooze_until.is.null,snooze_until.lte.${new Date().toISOString()}`)
       .order("priority", { ascending: false })
-      .order("created_at", { ascending: true })
+      .order("queued_at", { ascending: true })
       .limit(1)
       .single();
 
@@ -215,7 +221,25 @@ export async function getNextPopup(userId: string) {
       throw error;
     }
 
-    return { success: true, popup: data || null };
+    if (!data) return { success: true, popup: null };
+
+    // Best-effort: transition to displayed (race-safe-ish)
+    const beforeStatus = data.status;
+    const { data: updated } = await supabase
+      .from("popups")
+      .update({
+        status: "displayed",
+        displayed_at: new Date().toISOString(),
+        shown_at: new Date().toISOString(),
+      })
+      .eq("id", data.id)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+
+    const after = updated || data;
+    const didTransition = beforeStatus !== after.status;
+    return { success: true, popup: after as Record<string, unknown>, didTransition };
   } catch (error) {
     console.error("Failed to get next popup:", error);
     return {
