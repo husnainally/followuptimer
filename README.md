@@ -1,7 +1,7 @@
 # ⏰ FollowUpTimer 
 
 A smart reminder application with motivational affirmations, built with Next.js, Supabase, Resend, and QStash. 
-
+    
 ## ✨ Features
 
 - 🔐 **Authentication** - Secure email/password auth with Supabase 
