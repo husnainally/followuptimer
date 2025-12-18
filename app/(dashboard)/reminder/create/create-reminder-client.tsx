@@ -24,6 +24,8 @@ interface Contact {
   name: string
 }
 
+const NO_CONTACT_VALUE = "__none__"
+
 export function CreateReminderClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -213,14 +215,16 @@ export function CreateReminderClient() {
                 <div className="space-y-2">
                   <Label htmlFor="contact">Link to Contact (Optional)</Label>
                   <Select
-                    value={selectedContactId || ""}
-                    onValueChange={(value) => setSelectedContactId(value || null)}
+                    value={selectedContactId ?? NO_CONTACT_VALUE}
+                    onValueChange={(value) =>
+                      setSelectedContactId(value === NO_CONTACT_VALUE ? null : value)
+                    }
                   >
                     <SelectTrigger id="contact">
                       <SelectValue placeholder="Select a contact (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value={NO_CONTACT_VALUE}>None</SelectItem>
                       {contacts.map((contact) => (
                         <SelectItem key={contact.id} value={contact.id}>
                           {contact.name}
