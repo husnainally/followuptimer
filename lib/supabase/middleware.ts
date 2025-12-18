@@ -37,10 +37,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes
+  // Protected routes (app area). In waitlist mode, we redirect unauth users to `/`
   const protectedRoutes = [
     "/dashboard",
     "/reminders",
+    "/reminder",
+    "/contacts",
+    "/notifications",
     "/settings",
     "/step1",
     "/step2",
@@ -56,9 +59,9 @@ export async function updateSession(request: NextRequest) {
   );
 
   if (!user && isProtectedRoute) {
-    // Redirect to login if accessing protected route without auth
+    // In waitlist mode (production landing), send users back to `/` instead of `/login`
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
