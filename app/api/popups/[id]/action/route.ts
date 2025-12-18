@@ -2,6 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/events";
 
+function getString(v: unknown): string | null {
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+function getStringFromRecord(obj: unknown, key: string): string | null {
+  if (!obj || typeof obj !== "object") return null;
+  return getString((obj as Record<string, unknown>)[key]);
+}
+
 // POST /api/popups/[id]/action - Handle popup action (complete/snooze/follow-up)
 export async function POST(
   request: Request,
@@ -19,7 +28,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { action_type, action_data } = body;
+    const { action_type, action_data, snooze_until } = body;
 
     if (!action_type) {
       return NextResponse.json(
@@ -43,11 +52,15 @@ export async function POST(
       );
     }
 
-    // Update popup status
+    const normalizedAction = String(action_type).toUpperCase();
+
+    // Update popup status (acted) + store action_taken
     const { data: updatedPopup, error: updateError } = await supabase
       .from("popups")
       .update({
-        status: "action_taken",
+        status: "acted",
+        action_taken: normalizedAction,
+        closed_at: new Date().toISOString(),
       })
       .eq("id", id)
       .select()
@@ -61,7 +74,7 @@ export async function POST(
       .insert({
         popup_id: id,
         user_id: user.id,
-        action_type,
+        action_type: normalizedAction,
         action_data: action_data || {},
       });
 
@@ -70,22 +83,47 @@ export async function POST(
     // Log popup_action event
     await logEvent({
       userId: user.id,
-      eventType: "popup_action",
+      eventType: "popup_action_clicked",
       eventData: {
         popup_id: id,
-        action_type,
+        action_type: normalizedAction,
         reminder_id: popup.reminder_id,
         ...(action_data || {}),
       },
     });
 
     // Handle action-specific logic
-    if (action_type === "complete" && popup.reminder_id) {
+    if (normalizedAction === "FOLLOW_UP_NOW") {
+      const actionUrl =
+        getStringFromRecord(popup.payload, "thread_link") ||
+        getStringFromRecord(popup.action_data, "action_url") ||
+        getStringFromRecord(action_data, "action_url");
+
+      return NextResponse.json({
+        success: true,
+        popup: updatedPopup,
+        action_url: actionUrl,
+      });
+    }
+
+    if ((normalizedAction === "MARK_DONE" || normalizedAction === "COMPLETE") && popup.reminder_id) {
       // Mark reminder as completed
       await supabase
         .from("reminders")
         .update({ status: "sent" })
         .eq("id", popup.reminder_id);
+
+      await logEvent({
+        userId: user.id,
+        eventType: "task_completed",
+        eventData: {
+          popup_id: id,
+          reminder_id: popup.reminder_id,
+        },
+        source: "app",
+        reminderId: popup.reminder_id,
+        useServiceClient: true,
+      });
 
       // Log reminder_completed event
       const { data: reminder } = await supabase
@@ -119,17 +157,56 @@ export async function POST(
           { reminder_id: popup.reminder_id }
         );
       }
-    } else if (action_type === "snooze" && popup.reminder_id) {
-      // Trigger snooze API
-      const snoozeMinutes = action_data?.minutes || 10;
+    } else if (normalizedAction === "SNOOZE" && popup.reminder_id) {
+      const minutes = typeof action_data?.minutes === "number" ? action_data.minutes : 60;
+      const computedSnoozeUntil =
+        typeof snooze_until === "string"
+          ? snooze_until
+          : new Date(Date.now() + minutes * 60 * 1000).toISOString();
+
+      // Persist snooze on popup instance
+      await supabase
+        .from("popups")
+        .update({ snooze_until: computedSnoozeUntil })
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      // Trigger snooze API for reminder scheduling
       await fetch(
         `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/reminders/${popup.reminder_id}/snooze`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ minutes: snoozeMinutes }),
+          body: JSON.stringify({ minutes }),
         }
       );
+
+      await logEvent({
+        userId: user.id,
+        eventType: "popup_snoozed",
+        eventData: {
+          popup_id: id,
+          snooze_until: computedSnoozeUntil,
+          minutes,
+          reminder_id: popup.reminder_id,
+        },
+        source: "app",
+        reminderId: popup.reminder_id,
+        useServiceClient: true,
+      });
+
+      await logEvent({
+        userId: user.id,
+        eventType: "reminder_scheduled",
+        eventData: {
+          reminder_id: popup.reminder_id,
+          snooze_until: computedSnoozeUntil,
+          minutes,
+        },
+        source: "app",
+        reminderId: popup.reminder_id,
+        useServiceClient: true,
+      });
     }
 
     return NextResponse.json({

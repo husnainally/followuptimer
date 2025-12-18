@@ -84,7 +84,7 @@ export const reminderSchema = z.object({
   notification_method: z.enum(['email', 'push', 'in_app'], {
     message: 'Please select a notification method',
   }),
-  affirmation_enabled: z.boolean().optional().default(true),
+  affirmation_enabled: z.boolean().default(true),
 });
 
-export type ReminderFormData = z.infer<typeof reminderSchema>;
+export type ReminderFormData = z.input<typeof reminderSchema>;

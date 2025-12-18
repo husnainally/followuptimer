@@ -14,10 +14,12 @@ export interface PopupProps {
   title: string;
   message: string;
   affirmation?: string;
-  onComplete?: () => void;
-  onSnooze?: () => void;
-  onFollowUp?: () => void;
+  onFollowUpNow?: () => void;
+  onSnooze?: (minutes: number) => void;
+  snoozeOptions?: Array<{ label: string; minutes: number }>;
+  onMarkDone?: () => void;
   onDismiss?: () => void;
+  isLoading?: boolean;
   className?: string;
 }
 
@@ -49,15 +51,17 @@ const templateStyles = {
 };
 
 export function Popup({
-  id,
+  id: _id,
   templateType,
   title,
   message,
   affirmation,
-  onComplete,
+  onFollowUpNow,
   onSnooze,
-  onFollowUp,
+  snoozeOptions,
+  onMarkDone,
   onDismiss,
+  isLoading,
   className,
 }: PopupProps) {
   const styles = templateStyles[templateType];
@@ -91,6 +95,7 @@ export function Popup({
               size="icon"
               className="h-6 w-6 rounded-full"
               onClick={onDismiss}
+              disabled={isLoading}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -107,26 +112,36 @@ export function Popup({
           </div>
         )}
         <div className="flex gap-2 flex-wrap">
-          {onComplete && (
+          {onFollowUpNow && (
             <Button
               size="sm"
-              onClick={onComplete}
+              onClick={onFollowUpNow}
               className="bg-primary hover:bg-primary/90"
+              disabled={isLoading}
             >
-              <Check className="h-4 w-4 mr-2" />
-              Complete
-            </Button>
-          )}
-          {onSnooze && (
-            <Button size="sm" variant="outline" onClick={onSnooze}>
-              <Clock className="h-4 w-4 mr-2" />
-              Snooze
-            </Button>
-          )}
-          {onFollowUp && (
-            <Button size="sm" variant="outline" onClick={onFollowUp}>
               <ArrowRight className="h-4 w-4 mr-2" />
-              Follow Up
+              Follow up now
+            </Button>
+          )}
+          {onSnooze &&
+            (snoozeOptions?.length ? snoozeOptions : [{ label: "Snooze 1h", minutes: 60 }]).map(
+              (opt) => (
+                <Button
+                  key={opt.label}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onSnooze(opt.minutes)}
+                  disabled={isLoading}
+                >
+                  <Clock className="h-4 w-4 mr-2" />
+                  {opt.label}
+                </Button>
+              )
+            )}
+          {onMarkDone && (
+            <Button size="sm" variant="outline" onClick={onMarkDone} disabled={isLoading}>
+              <Check className="h-4 w-4 mr-2" />
+              Mark done
             </Button>
           )}
         </div>

@@ -38,6 +38,7 @@ export default function ReminderDetailPage() {
       remind_at: new Date(Date.now() + 60 * 60 * 1000),
       tone: "motivational",
       notification_method: "email",
+      affirmation_enabled: false,
     },
   })
   const initialDate = new Date(Date.now() + 60 * 60 * 1000)
@@ -73,6 +74,7 @@ export default function ReminderDetailPage() {
         remind_at: remindAtDate,
         tone: reminder?.tone ?? "motivational",
         notification_method: reminder?.notification_method ?? "email",
+        affirmation_enabled: reminder?.affirmation_enabled ?? false,
       })
       setDateValue(remindAtDate)
       setTimeValue(format(remindAtDate, "HH:mm"))

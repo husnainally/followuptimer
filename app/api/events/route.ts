@@ -31,14 +31,21 @@ export async function POST(request: Request) {
       "reminder_snoozed",
       "reminder_dismissed",
       "reminder_missed",
+      "reminder_due",
+      "reminder_scheduled",
       "popup_shown",
       "popup_action",
+      "popup_dismissed",
+      "popup_action_clicked",
+      "popup_snoozed",
+      "popup_expired",
       "inactivity_detected",
       "streak_achieved",
       "streak_incremented",
       "streak_broken",
       "follow_up_required",
       "email_opened",
+      "no_reply_after_n_days",
       "linkedin_profile_viewed",
       "linkedin_message_sent",
     ];
@@ -86,6 +93,17 @@ export async function POST(request: Request) {
         result.eventId,
         event_data || {}
       );
+
+      // Popup engine: create popup instances from triggerable events (rules-driven)
+      const { createPopupsFromEvent } = await import("@/lib/popup-engine");
+      await createPopupsFromEvent({
+        userId: user.id,
+        eventId: result.eventId,
+        eventType: event_type as EventType,
+        eventData: event_data || {},
+        contactId: contact_id || undefined,
+        reminderId: reminder_id || undefined,
+      });
     }
 
     if (!result.success) {
