@@ -1,6 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { type EventType } from "@/lib/events";
-import { generateRotatedAffirmation, type Tone } from "@/lib/affirmations";
+import { getAffirmationForUser } from "@/lib/affirmation-engine";
 
 export type PopupActionType =
   | "FOLLOW_UP_NOW"
@@ -382,38 +382,15 @@ export async function createPopupsFromEvent(
       reminderId: input.reminderId,
     });
 
-    // Get user profile for affirmation preferences
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("tone_preference, affirmation_frequency")
-      .eq("id", input.userId)
-      .single();
-
-    // Get recent affirmations to avoid immediate repetition (last 5 popups)
-    const { data: recentPopups } = await supabase
-      .from("popups")
-      .select("affirmation")
-      .eq("user_id", input.userId)
-      .not("affirmation", "is", null)
-      .order("queued_at", { ascending: false })
-      .limit(5);
-
-    const recentAffirmations = (recentPopups || [])
-      .map(p => p.affirmation)
-      .filter((aff): aff is string => typeof aff === "string" && aff.length > 0);
-
-    // Generate affirmation if user has affirmations enabled (affirmation_frequency is not null)
+    // Get affirmation using new affirmation engine (will be set after popup creation)
+    // We'll get it after popup is created so we can pass popup_id
     let affirmation: string | null = null;
-    if (profile?.affirmation_frequency) {
-      const tone = (profile.tone_preference || "motivational") as Tone;
-      affirmation = generateRotatedAffirmation(tone, recentAffirmations);
-    }
 
     const expiresAt = new Date(
       Date.now() + Math.max(0, rule.ttl_seconds || 0) * 1000
     ).toISOString();
 
-    const { error: insertError } = await supabase
+    const { data: insertedPopup, error: insertError } = await supabase
       .from("popups")
       .insert({
         user_id: input.userId,
@@ -424,7 +401,7 @@ export async function createPopupsFromEvent(
         template_type: "success", // legacy enum; UI uses title/message/payload for MVP
         title: rendered.title,
         message: rendered.message,
-        affirmation: affirmation,
+        affirmation: null, // Will be set after getting affirmation
         priority: Math.max(1, Math.min(10, rule.priority || 5)),
         status: "queued" as PopupInstanceStatus,
         queued_at: nowIso(),
@@ -444,6 +421,28 @@ export async function createPopupsFromEvent(
         return;
       }
       throw insertError;
+    }
+
+    // Get affirmation using new affirmation engine (after popup is created so we can pass popup_id)
+    if (insertedPopup) {
+      const affirmationResult = await getAffirmationForUser(
+        input.userId,
+        {
+          popupType: rule.template_key,
+          eventType: input.eventType,
+          reminderId: input.reminderId,
+          contactId: input.contactId,
+        },
+        insertedPopup.id
+      );
+
+      // Update popup with affirmation if one was selected
+      if (affirmationResult) {
+        await supabase
+          .from("popups")
+          .update({ affirmation: affirmationResult.text })
+          .eq("id", insertedPopup.id);
+      }
     }
 
     return;
