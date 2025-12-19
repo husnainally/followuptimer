@@ -4,7 +4,13 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Form, FormField } from "@/components/ui/form";
 import { ControlledSwitch } from "@/components/controlled-switch";
@@ -19,8 +25,14 @@ const snoozeSettingsSchema = z.object({
   workingHoursStart: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/),
   workingHoursEnd: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/),
   workingDays: z.array(z.number().min(0).max(6)).min(1),
-  quietHoursStart: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).nullable(),
-  quietHoursEnd: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).nullable(),
+  quietHoursStart: z
+    .string()
+    .regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/)
+    .nullable(),
+  quietHoursEnd: z
+    .string()
+    .regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/)
+    .nullable(),
   maxRemindersPerDay: z.number().min(1).max(100).default(10),
   allowWeekends: z.boolean().default(false),
   laterToday: z.boolean().default(true),
@@ -29,7 +41,9 @@ const snoozeSettingsSchema = z.object({
   in3Days: z.boolean().default(true),
   nextWeek: z.boolean().default(true),
   pickATime: z.boolean().default(true),
-  followUpCadence: z.enum(["fast", "balanced", "light_touch"]).default("balanced"),
+  followUpCadence: z
+    .enum(["fast", "balanced", "light_touch"])
+    .default("balanced"),
 });
 
 type SnoozeSettingsFormData = z.infer<typeof snoozeSettingsSchema>;
@@ -87,7 +101,8 @@ export function SnoozeSettings() {
           if (data.preferences) {
             const prefs = data.preferences;
             form.reset({
-              workingHoursStart: prefs.working_hours_start?.slice(0, 5) || "09:00",
+              workingHoursStart:
+                prefs.working_hours_start?.slice(0, 5) || "09:00",
               workingHoursEnd: prefs.working_hours_end?.slice(0, 5) || "17:30",
               workingDays: prefs.working_days || [1, 2, 3, 4, 5],
               quietHoursStart: prefs.quiet_hours_start?.slice(0, 5) || null,
@@ -95,18 +110,24 @@ export function SnoozeSettings() {
               maxRemindersPerDay: prefs.max_reminders_per_day || 10,
               allowWeekends: prefs.allow_weekends ?? false,
               laterToday: prefs.default_snooze_options?.later_today ?? true,
-              tomorrowMorning: prefs.default_snooze_options?.tomorrow_morning ?? true,
-              nextWorkingDay: prefs.default_snooze_options?.next_working_day ?? true,
+              tomorrowMorning:
+                prefs.default_snooze_options?.tomorrow_morning ?? true,
+              nextWorkingDay:
+                prefs.default_snooze_options?.next_working_day ?? true,
               in3Days: prefs.default_snooze_options?.in_3_days ?? true,
               nextWeek: prefs.default_snooze_options?.next_week ?? true,
               pickATime: prefs.default_snooze_options?.pick_a_time ?? true,
               followUpCadence: prefs.follow_up_cadence || "balanced",
             });
           }
+        } else {
+          // If 404 or other error, use defaults (preferences will be created on first save)
+          console.log("No preferences found, using defaults");
         }
       }
     } catch (error) {
       console.error("Failed to load snooze settings:", error);
+      // Use defaults on error
     } finally {
       setLoading(false);
     }
@@ -121,8 +142,12 @@ export function SnoozeSettings() {
           working_hours_start: `${data.workingHoursStart}:00`,
           working_hours_end: `${data.workingHoursEnd}:00`,
           working_days: data.workingDays,
-          quiet_hours_start: data.quietHoursStart ? `${data.quietHoursStart}:00` : null,
-          quiet_hours_end: data.quietHoursEnd ? `${data.quietHoursEnd}:00` : null,
+          quiet_hours_start: data.quietHoursStart
+            ? `${data.quietHoursStart}:00`
+            : null,
+          quiet_hours_end: data.quietHoursEnd
+            ? `${data.quietHoursEnd}:00`
+            : null,
           max_reminders_per_day: data.maxRemindersPerDay,
           allow_weekends: data.allowWeekends,
           default_snooze_options: {
@@ -156,7 +181,9 @@ export function SnoozeSettings() {
       <Card>
         <CardHeader>
           <CardTitle>Snooze Preferences</CardTitle>
-          <CardDescription>Configure when and how reminders are scheduled</CardDescription>
+          <CardDescription>
+            Configure when and how reminders are scheduled
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Skeleton className="h-20 w-full" />
@@ -229,7 +256,10 @@ export function SnoozeSettings() {
                 <Label>Working Days</Label>
                 <div className="flex flex-wrap gap-3">
                   {dayLabels.map((day) => (
-                    <div key={day.value} className="flex items-center space-x-2">
+                    <div
+                      key={day.value}
+                      className="flex items-center space-x-2"
+                    >
                       <input
                         type="checkbox"
                         id={`day-${day.value}`}
@@ -237,7 +267,10 @@ export function SnoozeSettings() {
                         onChange={(e) => {
                           const currentDays = form.getValues("workingDays");
                           if (e.target.checked) {
-                            form.setValue("workingDays", [...currentDays, day.value].sort());
+                            form.setValue(
+                              "workingDays",
+                              [...currentDays, day.value].sort()
+                            );
                           } else {
                             form.setValue(
                               "workingDays",
@@ -261,7 +294,9 @@ export function SnoozeSettings() {
 
             {/* Quiet Hours */}
             <div className="space-y-4 border-b pb-6">
-              <Label className="text-base font-semibold">Quiet Hours (Optional)</Label>
+              <Label className="text-base font-semibold">
+                Quiet Hours (Optional)
+              </Label>
               <p className="text-sm text-muted-foreground">
                 Times when you don't want to receive reminders
               </p>
@@ -305,11 +340,15 @@ export function SnoozeSettings() {
 
             {/* Limits & Behavior */}
             <div className="space-y-4 border-b pb-6">
-              <Label className="text-base font-semibold">Limits & Behavior</Label>
+              <Label className="text-base font-semibold">
+                Limits & Behavior
+              </Label>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="maxRemindersPerDay">Max Reminders Per Day</Label>
+                  <Label htmlFor="maxRemindersPerDay">
+                    Max Reminders Per Day
+                  </Label>
                   <FormField
                     control={form.control}
                     name="maxRemindersPerDay"
@@ -321,11 +360,14 @@ export function SnoozeSettings() {
                           min={1}
                           max={100}
                           value={field.value}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                          onChange={(e) =>
+                            field.onChange(parseInt(e.target.value) || 1)
+                          }
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Maximum reminders scheduled per day (1-100, default: 10)
+                          Maximum reminders scheduled per day (1-100, default:
+                          10)
                         </p>
                       </>
                     )}
@@ -333,7 +375,9 @@ export function SnoozeSettings() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-base font-semibold">Weekend Behavior</Label>
+                  <Label className="text-base font-semibold">
+                    Weekend Behavior
+                  </Label>
                   <FormField
                     control={form.control}
                     name="allowWeekends"
@@ -344,8 +388,13 @@ export function SnoozeSettings() {
                           name="allowWeekends"
                         />
                         <div className="flex-1">
-                          <Label htmlFor="allowWeekends" className="cursor-pointer">
-                            {field.value ? "Allow weekends" : "Defer to next working day"}
+                          <Label
+                            htmlFor="allowWeekends"
+                            className="cursor-pointer"
+                          >
+                            {field.value
+                              ? "Allow weekends"
+                              : "Defer to next working day"}
                           </Label>
                           <p className="text-xs text-muted-foreground">
                             {field.value
@@ -362,7 +411,9 @@ export function SnoozeSettings() {
 
             {/* Default Snooze Options */}
             <div className="space-y-4 border-b pb-6">
-              <Label className="text-base font-semibold">Default Snooze Options</Label>
+              <Label className="text-base font-semibold">
+                Default Snooze Options
+              </Label>
               <p className="text-sm text-muted-foreground">
                 Which snooze options should be available by default?
               </p>
@@ -376,7 +427,10 @@ export function SnoozeSettings() {
                       <Label htmlFor="laterToday" className="cursor-pointer">
                         Later today
                       </Label>
-                      <ControlledSwitch control={form.control} name="laterToday" />
+                      <ControlledSwitch
+                        control={form.control}
+                        name="laterToday"
+                      />
                     </div>
                   )}
                 />
@@ -385,10 +439,16 @@ export function SnoozeSettings() {
                   name="tomorrowMorning"
                   render={({ field }) => (
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="tomorrowMorning" className="cursor-pointer">
+                      <Label
+                        htmlFor="tomorrowMorning"
+                        className="cursor-pointer"
+                      >
                         Tomorrow morning
                       </Label>
-                      <ControlledSwitch control={form.control} name="tomorrowMorning" />
+                      <ControlledSwitch
+                        control={form.control}
+                        name="tomorrowMorning"
+                      />
                     </div>
                   )}
                 />
@@ -397,10 +457,16 @@ export function SnoozeSettings() {
                   name="nextWorkingDay"
                   render={({ field }) => (
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="nextWorkingDay" className="cursor-pointer">
+                      <Label
+                        htmlFor="nextWorkingDay"
+                        className="cursor-pointer"
+                      >
                         Next working day
                       </Label>
-                      <ControlledSwitch control={form.control} name="nextWorkingDay" />
+                      <ControlledSwitch
+                        control={form.control}
+                        name="nextWorkingDay"
+                      />
                     </div>
                   )}
                 />
@@ -424,7 +490,10 @@ export function SnoozeSettings() {
                       <Label htmlFor="nextWeek" className="cursor-pointer">
                         Next week
                       </Label>
-                      <ControlledSwitch control={form.control} name="nextWeek" />
+                      <ControlledSwitch
+                        control={form.control}
+                        name="nextWeek"
+                      />
                     </div>
                   )}
                 />
@@ -436,7 +505,10 @@ export function SnoozeSettings() {
                       <Label htmlFor="pickATime" className="cursor-pointer">
                         Pick a time
                       </Label>
-                      <ControlledSwitch control={form.control} name="pickATime" />
+                      <ControlledSwitch
+                        control={form.control}
+                        name="pickATime"
+                      />
                     </div>
                   )}
                 />
@@ -445,7 +517,9 @@ export function SnoozeSettings() {
 
             {/* Follow-up Cadence */}
             <div className="space-y-4 border-b pb-6">
-              <Label className="text-base font-semibold">Follow-up Cadence</Label>
+              <Label className="text-base font-semibold">
+                Follow-up Cadence
+              </Label>
               <p className="text-sm text-muted-foreground">
                 How frequently should reminders be suggested?
               </p>
@@ -456,7 +530,11 @@ export function SnoozeSettings() {
                 render={({ field }) => (
                   <RadioGroup
                     value={field.value}
-                    onValueChange={(value) => field.onChange(value as "fast" | "balanced" | "light_touch")}
+                    onValueChange={(value) =>
+                      field.onChange(
+                        value as "fast" | "balanced" | "light_touch"
+                      )
+                    }
                     className="space-y-2"
                   >
                     <div className="flex items-center space-x-2">
@@ -500,4 +578,3 @@ export function SnoozeSettings() {
     </Card>
   );
 }
-
