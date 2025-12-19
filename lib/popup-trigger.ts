@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { type EventType } from "@/lib/events";
+import { logEvent } from "@/lib/events";
 
 export type PopupTemplateType = "success" | "streak" | "inactivity" | "follow_up_required";
 
@@ -195,6 +196,33 @@ export async function getNextPopup(
 }> {
   try {
     const supabase = createServiceClient();
+
+    // Get expired queued popups before marking them
+    const { data: expiredPopups } = await supabase
+      .from("popups")
+      .select("id, rule_id, source_event_id, contact_id, reminder_id")
+      .eq("user_id", userId)
+      .in("status", ["queued", "pending"])
+      .lt("expires_at", new Date().toISOString());
+
+    // Log popup_expired event for each expired popup
+    if (expiredPopups && expiredPopups.length > 0) {
+      for (const popup of expiredPopups) {
+        await logEvent({
+          userId,
+          eventType: "popup_expired",
+          eventData: {
+            popup_id: popup.id,
+            rule_id: popup.rule_id || undefined,
+            source_event_id: popup.source_event_id || undefined,
+          },
+          source: "scheduler",
+          contactId: popup.contact_id || undefined,
+          reminderId: popup.reminder_id || undefined,
+          useServiceClient: true,
+        });
+      }
+    }
 
     // Mark expired queued popups (best-effort)
     await supabase

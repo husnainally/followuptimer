@@ -120,3 +120,24 @@ export function shouldShowAffirmation(
 export function getAffirmationsForTone(tone: Tone): string[] {
   return affirmationPools[tone] || motivational;
 }
+
+/**
+ * Generate a rotated affirmation that avoids immediate repetition
+ * @param tone - User's tone preference
+ * @param recentAffirmations - Array of recently shown affirmations to avoid
+ * @returns A new affirmation that hasn't been shown recently
+ */
+export function generateRotatedAffirmation(
+  tone: Tone = 'motivational',
+  recentAffirmations: string[] = []
+): string {
+  const pool = affirmationPools[tone] || motivational;
+  
+  // Filter out recently shown affirmations
+  const available = pool.filter(aff => !recentAffirmations.includes(aff));
+  
+  // If all affirmations were recently shown, use the full pool (allow repetition after cycling through all)
+  const poolToUse = available.length > 0 ? available : pool;
+  
+  return poolToUse[Math.floor(Math.random() * poolToUse.length)];
+}

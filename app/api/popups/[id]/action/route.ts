@@ -52,6 +52,14 @@ export async function POST(
       );
     }
 
+    // Prevent duplicate actions - check if popup already processed
+    if (popup.status === "acted" || popup.status === "dismissed" || popup.status === "action_taken") {
+      return NextResponse.json(
+        { error: "Popup action already processed", popup },
+        { status: 409 } // Conflict
+      );
+    }
+
     const normalizedAction = String(action_type).toUpperCase();
 
     // Update popup status (acted) + store action_taken

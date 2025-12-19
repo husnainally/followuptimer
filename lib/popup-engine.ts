@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { type EventType } from "@/lib/events";
+import { generateRotatedAffirmation, type Tone } from "@/lib/affirmations";
 
 export type PopupActionType =
   | "FOLLOW_UP_NOW"
@@ -105,12 +106,31 @@ function buildTemplatePayload(args: {
   };
 
   switch (args.templateKey) {
-    case "email_opened":
+    case "email_opened": {
+      // Calculate time since email was opened
+      const eventTime = args.eventCreatedAt ? new Date(args.eventCreatedAt) : new Date();
+      const now = new Date();
+      const minutesAgo = Math.floor((now.getTime() - eventTime.getTime()) / (1000 * 60));
+      
+      let timeAgo: string;
+      if (minutesAgo < 1) {
+        timeAgo = "just now";
+      } else if (minutesAgo < 60) {
+        timeAgo = `${minutesAgo} ${minutesAgo === 1 ? "minute" : "minutes"} ago`;
+      } else if (minutesAgo < 1440) {
+        const hoursAgo = Math.floor(minutesAgo / 60);
+        timeAgo = `${hoursAgo} ${hoursAgo === 1 ? "hour" : "hours"} ago`;
+      } else {
+        const daysAgo = Math.floor(minutesAgo / 1440);
+        timeAgo = `${daysAgo} ${daysAgo === 1 ? "day" : "days"} ago`;
+      }
+      
       return {
         title: "Email opened",
-        message: `Your email to ${contactName} was opened recently.`,
+        message: `Your email to ${contactName} was opened ${timeAgo}.`,
         payload: basePayload,
       };
+    }
     case "reminder_due":
       return {
         title: "Follow-up due",
@@ -362,6 +382,33 @@ export async function createPopupsFromEvent(
       reminderId: input.reminderId,
     });
 
+    // Get user profile for affirmation preferences
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tone_preference, affirmation_frequency")
+      .eq("id", input.userId)
+      .single();
+
+    // Get recent affirmations to avoid immediate repetition (last 5 popups)
+    const { data: recentPopups } = await supabase
+      .from("popups")
+      .select("affirmation")
+      .eq("user_id", input.userId)
+      .not("affirmation", "is", null)
+      .order("queued_at", { ascending: false })
+      .limit(5);
+
+    const recentAffirmations = (recentPopups || [])
+      .map(p => p.affirmation)
+      .filter((aff): aff is string => typeof aff === "string" && aff.length > 0);
+
+    // Generate affirmation if user has affirmations enabled (affirmation_frequency is not null)
+    let affirmation: string | null = null;
+    if (profile?.affirmation_frequency) {
+      const tone = (profile.tone_preference || "motivational") as Tone;
+      affirmation = generateRotatedAffirmation(tone, recentAffirmations);
+    }
+
     const expiresAt = new Date(
       Date.now() + Math.max(0, rule.ttl_seconds || 0) * 1000
     ).toISOString();
@@ -377,7 +424,7 @@ export async function createPopupsFromEvent(
         template_type: "success", // legacy enum; UI uses title/message/payload for MVP
         title: rendered.title,
         message: rendered.message,
-        affirmation: null,
+        affirmation: affirmation,
         priority: Math.max(1, Math.min(10, rule.priority || 5)),
         status: "queued" as PopupInstanceStatus,
         queued_at: nowIso(),

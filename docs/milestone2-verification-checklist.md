@@ -37,12 +37,13 @@
 
 ### 3. Popup Templates ✅
 - [x] Template system with 4 MVP templates:
-  - [x] `email_opened` - "Your email to {{contact}} was opened recently"
+  - [x] `email_opened` - "Your email to {{contact}} was opened {{time_since}} ago" ✅ **FIXED** - Now shows "X minutes/hours/days ago"
   - [x] `reminder_due` - "Follow-up due: {{contact}}"
   - [x] `reminder_completed` - "Your reminder to {{contact}} has been sent"
   - [x] `no_reply_after_n_days` - "No reply yet — want to follow up?"
 - [x] Safe fallbacks for missing template variables
 - [x] Template payload includes: `template_key`, `source_event_id`, `contact_id`, `reminder_id`, `contact_name`, `thread_link`
+- [x] ✅ **FIXED** - Email opened template calculates and displays time since event
 
 ### 4. Default Popup Rules ✅
 - [x] Default rules created automatically for new users:
@@ -56,12 +57,18 @@
   - [x] Returns highest priority queued popup
   - [x] Transitions status: `queued` → `displayed`
   - [x] Logs `popup_shown` event on transition
+  - [x] ✅ **FIXED** - Marks expired popups and logs `popup_expired` events
 - [x] `POST /api/popups` - Create popup manually (for testing/admin)
+- [x] `POST /api/popups/[id]/displayed` - ✅ **NEW** - Mark popup as displayed
+  - [x] Transitions status: `queued` → `displayed`
+  - [x] Logs `popup_shown` event
+  - [x] Validates popup ownership and status
 - [x] `POST /api/popups/[id]/action` - Handle popup actions
   - [x] Supports: `FOLLOW_UP_NOW`, `SNOOZE`, `MARK_DONE`, `DISMISS`
   - [x] Updates popup status to `acted`
   - [x] Stores `action_taken` and `action_data`
   - [x] Logs `popup_action_clicked` event
+  - [x] ✅ **FIXED** - Prevents duplicate actions (checks if already `acted`/`dismissed`)
 - [x] `POST /api/popups/[id]/dismiss` - Dismiss popup
   - [x] Updates status to `dismissed`
   - [x] Logs `popup_dismissed` event
@@ -92,13 +99,16 @@
 ### 7. Popup Lifecycle Events ✅
 - [x] `popup_shown` - Logged when popup transitions to `displayed`
   - [x] Includes: `popup_id`, `rule_id`, `source_event_id`, `template_key`
+  - [x] ✅ **FIXED** - Also logged from `POST /api/popups/[id]/displayed` endpoint
 - [x] `popup_dismissed` - Logged when user dismisses popup
   - [x] Includes: `popup_id`, `rule_id`, `source_event_id`
 - [x] `popup_action_clicked` - Logged when user clicks action button
   - [x] Includes: `popup_id`, `action_type`, `reminder_id`, action-specific data
 - [x] `popup_snoozed` - Logged when user snoozes popup
   - [x] Includes: `popup_id`, `snooze_until`, `minutes`, `reminder_id`
-- [x] `popup_expired` - Ready for TTL expiry logic (event type exists)
+- [x] `popup_expired` - ✅ **FIXED** - Now logged when popups expire
+  - [x] Includes: `popup_id`, `rule_id`, `source_event_id`
+  - [x] Logged automatically in `getNextPopup` when marking expired popups
 
 ### 8. UI Components ✅
 - [x] `components/popup-system.tsx` - Main popup system component
@@ -106,6 +116,8 @@
   - [x] Manages popup state: `entering` → `visible` → `exiting`
   - [x] Handles all button actions
   - [x] Integrates with popup UI component
+  - [x] ✅ **FIXED** - Enhanced error handling for conflict responses (409)
+  - [x] ✅ **FIXED** - Graceful handling of duplicate actions
 - [x] `components/ui/popup.tsx` - Popup UI component
   - [x] Template-based styling (success, streak, inactivity, follow_up_required)
   - [x] Displays title, message, affirmation (optional)
@@ -129,17 +141,20 @@
 
 ## ⚠️ Known Issues / Notes
 
-### 1. POST /popup/:id/displayed Endpoint
-- **Status**: Not implemented as separate endpoint
-- **Current Behavior**: `GET /api/popups` handles display transition automatically
-- **Impact**: Minor - functionality works, but doesn't match exact requirement
-- **Note**: The requirement asks for `POST /popup/:id/displayed`, but current implementation transitions on GET. This is acceptable as it simplifies the flow.
+### 1. POST /popup/:id/displayed Endpoint ✅ FIXED
+- **Status**: ✅ Implemented - `POST /api/popups/[id]/displayed` endpoint created
+- **Current Behavior**: 
+  - New endpoint transitions `queued` → `displayed` and logs `popup_shown` event
+  - `GET /api/popups` still works for backward compatibility
+- **Note**: Both endpoints available - UI can use either approach
 
-### 2. Popup Expiry (TTL)
-- **Status**: `expires_at` field exists and is set, but automatic expiry not implemented
-- **Impact**: Expired popups may still be shown if not manually cleaned up
-- **Solution**: Add background job or check `expires_at` in `getNextPopup` query
-- **Note**: Event type `popup_expired` exists but not logged automatically
+### 2. Popup Expiry (TTL) ✅ FIXED
+- **Status**: ✅ Implemented - Automatic expiry with event logging
+- **Fixed**:
+  - `getNextPopup` marks expired popups and logs `popup_expired` events
+  - Expired popups are filtered out from queries
+  - Each expired popup logs event with `popup_id`, `rule_id`, `source_event_id`
+- **Note**: Expiry happens on-demand when `getNextPopup` is called (no background job needed)
 
 ### 3. Offline User Queueing
 - **Status**: Popups are queued, but no explicit "offline detection" logic
@@ -150,10 +165,14 @@
 - **Status**: ✅ Implemented - Highest priority rule wins per event
 - **Note**: If multiple events arrive simultaneously, each creates its own popup (queued), and `getNextPopup` returns highest priority
 
-### 5. Affirmation Layer
-- **Status**: Optional affirmation field exists in popup schema
-- **Current Behavior**: Affirmations not automatically appended (can be added via template)
-- **Note**: Requirement mentions "optional affirmation layer" - can be enhanced later
+### 5. Affirmation Layer ✅ FIXED
+- **Status**: ✅ Implemented - Automatic affirmation appending with rotation
+- **Fixed**:
+  - Affirmations automatically appended to popups when user has `affirmation_frequency` set
+  - Rotation logic prevents immediate repetition (checks last 5 popups)
+  - Uses user's `tone_preference` for affirmation style
+  - Stored in popup `affirmation` field
+- **Note**: Affirmations rotate through pool, avoiding recent repeats
 
 ### 6. Thread Link Fallback
 - **Status**: ✅ Implemented - Falls back to dashboard entity page if thread link missing
@@ -218,11 +237,21 @@
 The popup engine is rules-driven, handles eligibility checks (cooldowns, dedupe, caps), supports 4 MVP popup templates, includes animations with reduced motion support, implements all 4 button actions, and logs all lifecycle events to the Event DB.
 
 **Action Items Before Production:**
-1. Implement popup expiry logic (check `expires_at` in queries, background job)
+1. ~~Implement popup expiry logic~~ ✅ **COMPLETED** - Expiry logic implemented with event logging
 2. Add explicit offline detection if needed (current queueing may be sufficient)
 3. Test all edge cases thoroughly
 4. Monitor popup performance and adjust cooldowns/caps as needed
 5. Consider adding popup rules management UI for admins
+
+## 🔧 Recent Fixes (Post-QA Review)
+
+### QA Requirements Fixes (Completed)
+- ✅ **Popup Expiry Event Logging**: `popup_expired` events now logged when popups expire
+- ✅ **Email Opened Time Calculation**: Template now shows "opened X minutes/hours/days ago" instead of "recently"
+- ✅ **Affirmation Rotation**: Automatic affirmation appending with rotation to prevent immediate repeats
+- ✅ **Action Debouncing**: Enhanced status validation prevents duplicate actions (409 conflict response)
+- ✅ **POST /popup/:id/displayed Endpoint**: New endpoint created for explicit display tracking
+- ✅ **Error Handling**: Enhanced conflict handling and graceful degradation
 
 ## 🔧 Implementation Details
 
@@ -232,10 +261,15 @@ The popup engine is rules-driven, handles eligibility checks (cooldowns, dedupe,
 3. Engine matches event to rules by `trigger_event_type`
 4. Eligibility checks run (plan, preferences, dedupe, cooldowns, caps)
 5. If eligible, popup instance created with status `queued`
+   - ✅ Affirmation automatically appended if user has `affirmation_frequency` set
+   - ✅ Affirmation rotated to avoid immediate repetition
 6. UI polls `GET /api/popups` every 30s
+   - ✅ Expired popups marked and `popup_expired` events logged
 7. Highest priority queued popup returned and transitioned to `displayed`
 8. `popup_shown` event logged
 9. User interacts → action endpoint called → lifecycle event logged
+   - ✅ Duplicate actions prevented (status check)
+   - ✅ Enhanced error handling for conflicts
 
 ### Cooldown Strategy
 - **Global cooldown**: 60s default (prevents popup spam)

@@ -65,7 +65,18 @@ export function PopupSystem() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to handle action");
+        const errorData = await response.json().catch(() => ({}));
+        // If popup already processed (409), just close it gracefully
+        if (response.status === 409) {
+          toast.info("Action already completed");
+          setUiState("exiting");
+          setTimeout(() => {
+            setCurrentPopup(null);
+            fetchNextPopup();
+          }, 220);
+          return;
+        }
+        throw new Error(errorData.error || "Failed to handle action");
       }
 
       const result = await response.json().catch(() => ({}));
