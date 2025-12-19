@@ -128,6 +128,11 @@ export function PopupSystem() {
     { label: "Next week", minutes: 60 * 24 * 7 },
   ];
 
+  // Don't show snooze for reminder_completed popups (reminder already sent)
+  const sourceEventType = (currentPopup.payload as Record<string, unknown>)?.source_event_type as string | undefined;
+  const isReminderCompleted = sourceEventType === "reminder_completed";
+  const canSnooze = currentPopup.reminder_id && !isReminderCompleted;
+
   return (
     <div
       className={[
@@ -152,7 +157,7 @@ export function PopupSystem() {
           })
         }
         onSnooze={
-          currentPopup.reminder_id
+          canSnooze
             ? (minutes) =>
                 handleAction(
                   currentPopup.id,
@@ -162,7 +167,7 @@ export function PopupSystem() {
                 )
             : undefined
         }
-        snoozeOptions={currentPopup.reminder_id ? snoozeOptions : undefined}
+        snoozeOptions={canSnooze ? snoozeOptions : undefined}
         onMarkDone={
           currentPopup.reminder_id
             ? () =>

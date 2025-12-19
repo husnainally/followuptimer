@@ -158,6 +158,21 @@ export async function POST(
         );
       }
     } else if (normalizedAction === "SNOOZE" && popup.reminder_id) {
+      // Check if reminder is already sent/completed - don't allow snoozing
+      const { data: reminder } = await supabase
+        .from("reminders")
+        .select("status")
+        .eq("id", popup.reminder_id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (reminder?.status === "sent" || reminder?.status === "completed") {
+        return NextResponse.json(
+          { error: "Cannot snooze a reminder that has already been sent" },
+          { status: 400 }
+        );
+      }
+
       const minutes = typeof action_data?.minutes === "number" ? action_data.minutes : 60;
       const computedSnoozeUntil =
         typeof snooze_until === "string"
