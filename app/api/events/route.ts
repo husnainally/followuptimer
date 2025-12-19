@@ -49,6 +49,7 @@ export async function POST(request: Request) {
       "no_reply_after_n_days",
       "linkedin_profile_viewed",
       "linkedin_message_sent",
+      "affirmation_shown",
     ];
 
     if (!validEventTypes.includes(event_type as EventType)) {
