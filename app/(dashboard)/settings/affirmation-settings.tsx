@@ -15,15 +15,15 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const affirmationSettingsSchema = z.object({
-  salesMomentumEnabled: z.boolean().default(true),
-  calmProductivityEnabled: z.boolean().default(true),
-  consistencyEnabled: z.boolean().default(true),
-  resilienceEnabled: z.boolean().default(true),
-  focusEnabled: z.boolean().default(true),
-  generalPositiveEnabled: z.boolean().default(true),
-  globalCooldownMinutes: z.number().min(0).max(1440).default(30),
-  dailyCap: z.number().min(1).max(100).default(10),
-  tonePreference: z.enum(["sales", "calm", "mixed"]).default("mixed"),
+  salesMomentumEnabled: z.boolean(),
+  calmProductivityEnabled: z.boolean(),
+  consistencyEnabled: z.boolean(),
+  resilienceEnabled: z.boolean(),
+  focusEnabled: z.boolean(),
+  generalPositiveEnabled: z.boolean(),
+  globalCooldownMinutes: z.number().min(0).max(1440),
+  dailyCap: z.number().min(1).max(100),
+  tonePreference: z.enum(["sales", "calm", "mixed"]),
 });
 
 type AffirmationSettingsFormData = z.infer<typeof affirmationSettingsSchema>;

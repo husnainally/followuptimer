@@ -33,18 +33,16 @@ const snoozeSettingsSchema = z.object({
     .string()
     .regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/)
     .nullable(),
-  maxRemindersPerDay: z.number().min(1).max(100).default(10),
-  allowWeekends: z.boolean().default(false),
-  laterToday: z.boolean().default(true),
-  tomorrowMorning: z.boolean().default(true),
-  nextWorkingDay: z.boolean().default(true),
-  in3Days: z.boolean().default(true),
-  nextWeek: z.boolean().default(true),
-  pickATime: z.boolean().default(true),
-  followUpCadence: z
-    .enum(["fast", "balanced", "light_touch"])
-    .default("balanced"),
-  smartSuggestionsEnabled: z.boolean().default(true),
+  maxRemindersPerDay: z.number().min(1).max(100),
+  allowWeekends: z.boolean(),
+  laterToday: z.boolean(),
+  tomorrowMorning: z.boolean(),
+  nextWorkingDay: z.boolean(),
+  in3Days: z.boolean(),
+  nextWeek: z.boolean(),
+  pickATime: z.boolean(),
+  followUpCadence: z.enum(["fast", "balanced", "light_touch"]),
+  smartSuggestionsEnabled: z.boolean(),
 });
 
 type SnoozeSettingsFormData = z.infer<typeof snoozeSettingsSchema>;

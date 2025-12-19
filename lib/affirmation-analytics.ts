@@ -144,7 +144,7 @@ export async function getUserAffirmationAnalytics(
     last_shown_at: lastShown?.created_at || null,
     suppression_reasons: suppressionReasons,
     current_daily_count: todayCount || 0,
-    daily_cap,
+    daily_cap: dailyCap,
     cooldown_remaining_minutes: cooldownRemaining,
   };
 }
