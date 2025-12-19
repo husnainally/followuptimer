@@ -50,6 +50,8 @@ export async function POST(request: Request) {
       "linkedin_profile_viewed",
       "linkedin_message_sent",
       "affirmation_shown",
+      "affirmation_suppressed",
+      "affirmation_action_clicked",
     ];
 
     if (!validEventTypes.includes(event_type as EventType)) {
