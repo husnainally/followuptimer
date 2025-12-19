@@ -27,9 +27,16 @@ export type EventType =
   | "linkedin_message_sent"
   | "affirmation_shown"
   | "affirmation_suppressed"
-  | "affirmation_action_clicked";
+  | "affirmation_action_clicked"
+  | "snooze_suggested"
+  | "snooze_selected"
+  | "reminder_deferred_by_rule";
 
-export type EventSource = "app" | "scheduler" | "extension_gmail" | "extension_linkedin";
+export type EventSource =
+  | "app"
+  | "scheduler"
+  | "extension_gmail"
+  | "extension_linkedin";
 
 export interface EventData {
   reminder_id?: string;
@@ -67,7 +74,11 @@ export async function logEvent({
   contactId,
   reminderId,
   useServiceClient = false,
-}: LogEventOptions): Promise<{ success: boolean; eventId?: string; error?: string }> {
+}: LogEventOptions): Promise<{
+  success: boolean;
+  eventId?: string;
+  error?: string;
+}> {
   try {
     const supabase = useServiceClient
       ? createServiceClient()
@@ -126,7 +137,10 @@ export async function logExtensionEvent({
   contactId,
 }: {
   userId: string;
-  eventType: "email_opened" | "linkedin_profile_viewed" | "linkedin_message_sent";
+  eventType:
+    | "email_opened"
+    | "linkedin_profile_viewed"
+    | "linkedin_message_sent";
   source: "extension_gmail" | "extension_linkedin";
   eventData?: EventData;
   contactId?: string;
@@ -193,4 +207,3 @@ export async function queryEvents({
     };
   }
 }
-

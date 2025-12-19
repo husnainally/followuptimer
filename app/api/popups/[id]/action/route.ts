@@ -202,10 +202,15 @@ export async function POST(
       }
 
       const minutes = typeof action_data?.minutes === "number" ? action_data.minutes : 60;
+      const scheduledTime = typeof action_data?.scheduled_time === "string" ? action_data.scheduled_time : undefined;
+      const candidateType = typeof action_data?.candidate_type === "string" ? action_data.candidate_type : undefined;
+      const wasRecommended = typeof action_data?.was_recommended === "boolean" ? action_data.was_recommended : false;
+
       const computedSnoozeUntil =
-        typeof snooze_until === "string"
+        scheduledTime ||
+        (typeof snooze_until === "string"
           ? snooze_until
-          : new Date(Date.now() + minutes * 60 * 1000).toISOString();
+          : new Date(Date.now() + minutes * 60 * 1000).toISOString());
 
       // Persist snooze on popup instance
       await supabase
@@ -220,7 +225,13 @@ export async function POST(
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ minutes }),
+          body: JSON.stringify({
+            minutes: scheduledTime ? undefined : minutes,
+            scheduled_time: scheduledTime,
+            candidate_type: candidateType,
+            was_recommended: wasRecommended,
+            is_smart_suggestion: candidateType !== undefined,
+          }),
         }
       );
 
