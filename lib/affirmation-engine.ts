@@ -43,6 +43,23 @@ export async function getAffirmationForUser(
   const supabase = createServiceClient();
 
   try {
+    // 0. Idempotency check: If popup_id provided, check if affirmation already shown for this popup
+    if (popupId) {
+      const { data: existingUsage } = await supabase
+        .from("affirmation_usage")
+        .select("affirmation_id")
+        .eq("user_id", userId)
+        .eq("popup_id", popupId)
+        .limit(1)
+        .single();
+
+      if (existingUsage) {
+        // Affirmation already shown for this popup - return null to prevent duplicate logging
+        // This ensures idempotency: only one SHOWN event per popup_instance_id
+        return null;
+      }
+    }
+
     // 1. Check if affirmations are enabled for user
     const { data: profile } = await supabase
       .from("profiles")
@@ -53,6 +70,20 @@ export async function getAffirmationForUser(
     if (!profile?.affirmation_frequency) {
       await logSuppression(userId, "disabled_by_user", context, popupId);
       return null; // Affirmations disabled
+    }
+
+    // 1.5. Check if context is blacklisted (some popup types should never show affirmations)
+    const contextType = context?.eventType || context?.popupType || "unknown";
+    const { data: blacklisted } = await supabase
+      .from("affirmation_context_blacklist")
+      .select("context_type")
+      .eq("context_type", contextType)
+      .limit(1)
+      .single();
+
+    if (blacklisted) {
+      await logSuppression(userId, "context_not_allowed", context, popupId);
+      return null; // Context is blacklisted
     }
 
     // 2. Get or create user preferences
@@ -84,8 +115,8 @@ export async function getAffirmationForUser(
       return null;
     }
 
-    // 5. Determine allowed categories based on context
-    const allowedCategories = getCategoriesForContext(context, preferences);
+    // 5. Determine allowed categories based on context and tone preference
+    const allowedCategories = await getCategoriesForContext(context, preferences);
 
     if (allowedCategories.length === 0) {
       await logSuppression(userId, "category_disabled", context, popupId);
@@ -95,11 +126,12 @@ export async function getAffirmationForUser(
     // 6. Get recently shown affirmations (avoid repetition)
     const recentAffirmations = await getRecentAffirmations(userId, 10); // Last 10
 
-    // 7. Select category and affirmation
+    // 7. Select category and affirmation (with weighted selection)
     const affirmation = await selectAffirmation(
       allowedCategories,
       recentAffirmations,
-      preferences
+      preferences,
+      context?.eventType || context?.popupType
     );
 
     if (!affirmation) {
@@ -171,6 +203,7 @@ async function getUserPreferences(userId: string) {
       general_positive_enabled: true,
       global_cooldown_minutes: 30,
       daily_cap: 10,
+      tone_preference: "mixed",
     })
     .select()
     .single();
@@ -185,6 +218,7 @@ async function getUserPreferences(userId: string) {
     general_positive_enabled: true,
     global_cooldown_minutes: 30,
     daily_cap: 10,
+    tone_preference: "mixed",
   };
 }
 
@@ -221,6 +255,7 @@ async function checkGlobalCooldown(
 
 /**
  * Check if daily cap allows showing affirmation
+ * Uses user timezone for "today" calculation
  */
 async function checkDailyCap(
   userId: string,
@@ -228,14 +263,40 @@ async function checkDailyCap(
 ): Promise<{ allowed: boolean; countToday: number }> {
   const supabase = createServiceClient();
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  // Get user timezone
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", userId)
+    .single();
 
-  const { count } = await supabase
-    .from("affirmation_usage")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("shown_at", startOfDay.toISOString());
+  const userTimezone = profile?.timezone || "UTC";
+
+  // Use SQL to calculate start of day in user's timezone
+  // This is more reliable than JavaScript date manipulation
+  const { data: countData, error: rpcError } = await supabase.rpc("get_affirmation_count_today", {
+    p_user_id: userId,
+    p_timezone: userTimezone,
+  });
+
+  // Fallback to UTC if RPC doesn't exist or fails
+  if (rpcError || countData === null || countData === undefined) {
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    const { count: fallbackCount } = await supabase
+      .from("affirmation_usage")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("shown_at", startOfDay.toISOString());
+
+    return {
+      allowed: (fallbackCount || 0) < dailyCap,
+      countToday: fallbackCount || 0,
+    };
+  }
+
+  const count = typeof countData === "number" ? countData : 0;
 
   return {
     allowed: (count || 0) < dailyCap,
@@ -244,9 +305,9 @@ async function checkDailyCap(
 }
 
 /**
- * Determine allowed categories based on context and user preferences
+ * Determine allowed categories based on context, tone preference, and user preferences
  */
-function getCategoriesForContext(
+async function getCategoriesForContext(
   context: AffirmationContext | undefined,
   preferences: {
     sales_momentum_enabled: boolean;
@@ -255,42 +316,63 @@ function getCategoriesForContext(
     resilience_enabled: boolean;
     focus_enabled: boolean;
     general_positive_enabled: boolean;
+    tone_preference?: "sales" | "calm" | "mixed";
   }
-): AffirmationCategory[] {
+): Promise<AffirmationCategory[]> {
+  const supabase = createServiceClient();
   const categories: AffirmationCategory[] = [];
+  const tone = preferences.tone_preference || "mixed";
 
-  // Context-aware category selection
+  // Apply tone preference filter first
+  let toneFilteredCategories: AffirmationCategory[] = [];
+  if (tone === "sales") {
+    if (preferences.sales_momentum_enabled) toneFilteredCategories.push("sales_momentum");
+    if (preferences.focus_enabled) toneFilteredCategories.push("focus");
+    if (preferences.consistency_enabled) toneFilteredCategories.push("consistency");
+  } else if (tone === "calm") {
+    if (preferences.calm_productivity_enabled) toneFilteredCategories.push("calm_productivity");
+    if (preferences.resilience_enabled) toneFilteredCategories.push("resilience");
+    if (preferences.general_positive_enabled) toneFilteredCategories.push("general_positive");
+  } else {
+    // mixed - include all enabled categories
+    if (preferences.sales_momentum_enabled) toneFilteredCategories.push("sales_momentum");
+    if (preferences.calm_productivity_enabled) toneFilteredCategories.push("calm_productivity");
+    if (preferences.consistency_enabled) toneFilteredCategories.push("consistency");
+    if (preferences.resilience_enabled) toneFilteredCategories.push("resilience");
+    if (preferences.focus_enabled) toneFilteredCategories.push("focus");
+    if (preferences.general_positive_enabled) toneFilteredCategories.push("general_positive");
+  }
+
+  // Context-aware category selection (filters tone-filtered categories)
   if (context?.eventType === "email_opened" || context?.eventType === "reminder_due") {
     // Sales/follow-up context
-    if (preferences.sales_momentum_enabled) categories.push("sales_momentum");
-    if (preferences.focus_enabled) categories.push("focus");
-  }
-
-  if (context?.eventType === "reminder_completed") {
+    if (toneFilteredCategories.includes("sales_momentum")) categories.push("sales_momentum");
+    if (toneFilteredCategories.includes("focus")) categories.push("focus");
+  } else if (context?.eventType === "no_reply_after_n_days") {
+    // No reply context - resilience and consistency
+    if (toneFilteredCategories.includes("resilience")) categories.push("resilience");
+    if (toneFilteredCategories.includes("consistency")) categories.push("consistency");
+  } else if (context?.eventType === "reminder_completed") {
     // Completion context
-    if (preferences.consistency_enabled) categories.push("consistency");
-    if (preferences.general_positive_enabled) categories.push("general_positive");
-  }
-
-  if (context?.eventType === "reminder_missed" || context?.eventType === "inactivity_detected") {
+    if (toneFilteredCategories.includes("consistency")) categories.push("consistency");
+    if (toneFilteredCategories.includes("general_positive")) categories.push("general_positive");
+  } else if (context?.eventType === "reminder_missed" || context?.eventType === "inactivity_detected") {
     // Resilience context
-    if (preferences.resilience_enabled) categories.push("resilience");
-    if (preferences.calm_productivity_enabled) categories.push("calm_productivity");
+    if (toneFilteredCategories.includes("resilience")) categories.push("resilience");
+    if (toneFilteredCategories.includes("calm_productivity")) categories.push("calm_productivity");
   }
 
-  // Always include general_positive if enabled (fallback)
-  if (preferences.general_positive_enabled && !categories.includes("general_positive")) {
+  // Always include general_positive if enabled and in tone filter (fallback)
+  if (
+    toneFilteredCategories.includes("general_positive") &&
+    !categories.includes("general_positive")
+  ) {
     categories.push("general_positive");
   }
 
-  // If no context-specific categories, use all enabled categories
+  // If no context-specific categories, use all tone-filtered categories
   if (categories.length === 0) {
-    if (preferences.sales_momentum_enabled) categories.push("sales_momentum");
-    if (preferences.calm_productivity_enabled) categories.push("calm_productivity");
-    if (preferences.consistency_enabled) categories.push("consistency");
-    if (preferences.resilience_enabled) categories.push("resilience");
-    if (preferences.focus_enabled) categories.push("focus");
-    if (preferences.general_positive_enabled) categories.push("general_positive");
+    return toneFilteredCategories;
   }
 
   return categories;
@@ -317,6 +399,7 @@ async function getRecentAffirmations(
 
 /**
  * Select an affirmation from allowed categories, avoiding recent ones
+ * Uses weighted selection based on context and category weights
  */
 async function selectAffirmation(
   allowedCategories: AffirmationCategory[],
@@ -328,12 +411,13 @@ async function selectAffirmation(
     resilience_enabled: boolean;
     focus_enabled: boolean;
     general_positive_enabled: boolean;
-  }
+  },
+  contextType?: string
 ): Promise<{ id: string; text: string; category: AffirmationCategory } | null> {
   const supabase = createServiceClient();
 
-  // Select a random category from allowed categories (weighted by enabled status)
-  const category = selectRandomCategory(allowedCategories);
+  // Select a random category from allowed categories (weighted selection)
+  const category = await selectRandomCategoryWeighted(allowedCategories, contextType);
 
   // Get all affirmations in this category
   const { data: affirmations } = await supabase
@@ -353,7 +437,18 @@ async function selectAffirmation(
   const poolToUse = available.length > 0 ? available : affirmations;
 
   // Select random affirmation from pool
-  const selected = poolToUse[Math.floor(Math.random() * poolToUse.length)];
+  // Anti-repeat rule: If selected == last shown, re-roll up to 3 times
+  let selected = poolToUse[Math.floor(Math.random() * poolToUse.length)];
+  let reRollCount = 0;
+  const maxReRolls = 3;
+
+  if (recentAffirmationIds.length > 0 && poolToUse.length > 1) {
+    const lastShownId = recentAffirmationIds[0]; // Most recent
+    while (selected.id === lastShownId && reRollCount < maxReRolls && poolToUse.length > 1) {
+      selected = poolToUse[Math.floor(Math.random() * poolToUse.length)];
+      reRollCount++;
+    }
+  }
 
   return {
     id: selected.id,
@@ -363,15 +458,57 @@ async function selectAffirmation(
 }
 
 /**
- * Select a random category from allowed categories
- * Uses weighted random selection (all categories have equal weight for now)
+ * Select a random category from allowed categories using weighted selection
+ * Weights are based on context and stored in affirmation_category_weights table
  */
-function selectRandomCategory(categories: AffirmationCategory[]): AffirmationCategory {
+async function selectRandomCategoryWeighted(
+  categories: AffirmationCategory[],
+  contextType?: string
+): Promise<AffirmationCategory> {
   if (categories.length === 0) {
     return "general_positive"; // Fallback
   }
 
-  return categories[Math.floor(Math.random() * categories.length)];
+  const supabase = createServiceClient();
+
+  // Get weights for all categories
+  const { data: weights } = await supabase
+    .from("affirmation_category_weights")
+    .select("*")
+    .in("category", categories);
+
+  // Build weight map
+  const weightMap = new Map<AffirmationCategory, number>();
+  for (const category of categories) {
+    const weightData = weights?.find((w) => w.category === category);
+    let weight = weightData?.default_weight || 1.0;
+
+    // Use context-specific weight if available
+    if (contextType && weightData) {
+      const contextWeightKey = `context_${contextType.toLowerCase().replace(/_/g, "_")}_weight` as keyof typeof weightData;
+      const contextWeight = weightData[contextWeightKey] as number | null;
+      if (contextWeight !== null && contextWeight !== undefined) {
+        weight = contextWeight;
+      }
+    }
+
+    weightMap.set(category, weight);
+  }
+
+  // Weighted random selection
+  const totalWeight = Array.from(weightMap.values()).reduce((sum, w) => sum + w, 0);
+  let random = Math.random() * totalWeight;
+
+  for (const category of categories) {
+    const weight = weightMap.get(category) || 1.0;
+    random -= weight;
+    if (random <= 0) {
+      return category;
+    }
+  }
+
+  // Fallback to first category
+  return categories[0];
 }
 
 /**

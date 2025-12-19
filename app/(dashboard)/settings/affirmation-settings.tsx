@@ -23,6 +23,7 @@ const affirmationSettingsSchema = z.object({
   generalPositiveEnabled: z.boolean().default(true),
   globalCooldownMinutes: z.number().min(0).max(1440).default(30),
   dailyCap: z.number().min(1).max(100).default(10),
+  tonePreference: z.enum(["sales", "calm", "mixed"]).default("mixed"),
 });
 
 type AffirmationSettingsFormData = z.infer<typeof affirmationSettingsSchema>;
@@ -69,6 +70,7 @@ export function AffirmationSettings() {
       generalPositiveEnabled: true,
       globalCooldownMinutes: 30,
       dailyCap: 10,
+      tonePreference: "mixed",
     },
   });
 
@@ -101,6 +103,7 @@ export function AffirmationSettings() {
             generalPositiveEnabled: preferences.general_positive_enabled ?? true,
             globalCooldownMinutes: preferences.global_cooldown_minutes ?? 30,
             dailyCap: preferences.daily_cap ?? 10,
+            tonePreference: (preferences.tone_preference as "sales" | "calm" | "mixed") || "mixed",
           });
         }
       }
@@ -151,6 +154,7 @@ export function AffirmationSettings() {
           general_positive_enabled: data.generalPositiveEnabled,
           global_cooldown_minutes: data.globalCooldownMinutes,
           daily_cap: data.dailyCap,
+          tone_preference: data.tonePreference,
           updated_at: new Date().toISOString(),
         });
 
@@ -218,6 +222,36 @@ export function AffirmationSettings() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Tone Preference */}
+            <div className="space-y-4 border-t pt-6">
+              <Label className="text-base font-semibold">Tone Preference</Label>
+              <p className="text-sm text-muted-foreground">
+                Choose the overall tone of affirmations you want to see
+              </p>
+
+              <FormField
+                control={form.control}
+                name="tonePreference"
+                render={({ field }) => (
+                  <div className="space-y-2">
+                    <select
+                      id="tonePreference"
+                      value={field.value}
+                      onChange={(e) => field.onChange(e.target.value as "sales" | "calm" | "mixed")}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      <option value="mixed">Mixed (All categories)</option>
+                      <option value="sales">Sales (Sales Momentum, Focus, Consistency)</option>
+                      <option value="calm">Calm (Calm Productivity, Resilience, General Positive)</option>
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      Sales: Focused on sales momentum and action. Calm: Focused on productivity and resilience. Mixed: All categories balanced.
+                    </p>
+                  </div>
+                )}
+              />
             </div>
 
             {/* Frequency Controls */}
