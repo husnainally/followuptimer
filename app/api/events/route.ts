@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { logEvent, queryEvents, type EventType, type EventData } from "@/lib/events";
+import {
+  logEvent,
+  queryEvents,
+  type EventType,
+  type EventData,
+} from "@/lib/events";
 
 // POST /api/events - Log a behaviour event
 export async function POST(request: Request) {
@@ -52,17 +57,29 @@ export async function POST(request: Request) {
       "affirmation_shown",
       "affirmation_suppressed",
       "affirmation_action_clicked",
+      "snooze_suggested",
+      "snooze_selected",
+      "reminder_deferred_by_rule",
     ];
 
     if (!validEventTypes.includes(event_type as EventType)) {
       return NextResponse.json(
-        { error: `Invalid event_type. Must be one of: ${validEventTypes.join(", ")}` },
+        {
+          error: `Invalid event_type. Must be one of: ${validEventTypes.join(
+            ", "
+          )}`,
+        },
         { status: 400 }
       );
     }
 
     // Validate source
-    const validSources = ["app", "scheduler", "extension_gmail", "extension_linkedin"];
+    const validSources = [
+      "app",
+      "scheduler",
+      "extension_gmail",
+      "extension_linkedin",
+    ];
     const eventSource = source || "app";
     if (!validSources.includes(eventSource)) {
       return NextResponse.json(
@@ -83,7 +100,11 @@ export async function POST(request: Request) {
       userId: user.id,
       eventType: event_type as EventType,
       eventData: (event_data || {}) as EventData,
-      source: eventSource as "app" | "scheduler" | "extension_gmail" | "extension_linkedin",
+      source: eventSource as
+        | "app"
+        | "scheduler"
+        | "extension_gmail"
+        | "extension_linkedin",
       contactId: contact_id || undefined,
       reminderId: reminder_id || undefined,
     });
@@ -176,4 +197,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getSmartSnoozeSuggestion } from "@/lib/smart-snooze";
+import { getRecommendedSnooze } from "@/lib/smart-snooze-engine";
 
 // GET /api/snooze/suggestions - Get smart snooze suggestions
 export async function GET(request: Request) {
@@ -16,29 +16,50 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const reminderId = searchParams.get("reminder_id");
+    const eventType = searchParams.get("event_type");
 
-    const suggestion = await getSmartSnoozeSuggestion(
+    // Determine engagement signal from event type
+    let engagementSignal:
+      | "email_opened"
+      | "no_reply"
+      | "reminder_due"
+      | undefined;
+    if (eventType === "email_opened") {
+      engagementSignal = "email_opened";
+    } else if (eventType === "no_reply_after_n_days") {
+      engagementSignal = "no_reply";
+    } else if (eventType === "reminder_due") {
+      engagementSignal = "reminder_due";
+    }
+
+    const result = await getRecommendedSnooze(
       user.id,
-      reminderId || null
+      reminderId || undefined,
+      {
+        eventType: eventType || undefined,
+        reminderId: reminderId || undefined,
+        engagementSignal,
+      }
     );
 
-    if (!suggestion) {
+    if (!result) {
       return NextResponse.json({
-        suggestion: null,
-        message: "Smart snooze is disabled or unavailable",
+        candidates: [],
+        context: {},
+        message: "No snooze suggestions available",
       });
     }
 
     return NextResponse.json({
-      suggestion,
+      candidates: result.candidates,
+      context: result.context,
     });
   } catch (error: unknown) {
-    console.error("Failed to get snooze suggestion:", error);
+    console.error("Failed to get snooze suggestions:", error);
     const message =
       error instanceof Error
         ? error.message
-        : "Failed to get snooze suggestion";
+        : "Failed to get snooze suggestions";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

@@ -4,6 +4,15 @@ import { rescheduleReminder } from "@/lib/qstash";
 import { logEvent } from "@/lib/events";
 import { logSnooze } from "@/lib/smart-snooze";
 import { processEventForTriggers } from "@/lib/trigger-manager";
+import {
+  getUserSnoozePreferences,
+  adjustToWorkingHours,
+  isWithinWorkingHours,
+  isWithinQuietHours,
+  isWeekend,
+  countRemindersToday,
+  getNextWorkingDay,
+} from "@/lib/snooze-rules";
 
 // Snooze a reminder by adding time to it
 export async function POST(
@@ -22,7 +31,13 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { minutes = 10, is_smart_suggestion = false } = body; // Default to 10 minutes snooze
+    const {
+      minutes,
+      scheduled_time,
+      is_smart_suggestion = false,
+      candidate_type,
+      was_recommended = false,
+    } = body;
 
     // Get current reminder
     const { data: reminder, error: fetchError } = await supabase
@@ -41,9 +56,112 @@ export async function POST(
       );
     }
 
+    // Get user timezone and preferences
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("timezone")
+      .eq("id", user.id)
+      .single();
+
+    const timezone = profile?.timezone || "UTC";
+    const prefs = await getUserSnoozePreferences(user.id);
+
     // Calculate new remind_at time
-    const currentTime = new Date(reminder.remind_at);
-    const newTime = new Date(currentTime.getTime() + minutes * 60000);
+    let newTime: Date;
+    let originalTime: Date | null = null;
+    let wasAdjusted = false;
+    let adjustmentReason: "working_hours" | "quiet_hours" | "weekend" | "daily_cap" | null = null;
+
+    if (scheduled_time) {
+      // Use provided scheduled time
+      newTime = new Date(scheduled_time);
+      originalTime = new Date(newTime);
+    } else if (minutes) {
+      // Calculate from minutes
+      const currentTime = new Date(reminder.remind_at);
+      newTime = new Date(currentTime.getTime() + minutes * 60000);
+      originalTime = new Date(newTime);
+    } else {
+      return NextResponse.json(
+        { error: "Either minutes or scheduled_time must be provided" },
+        { status: 400 }
+      );
+    }
+
+    // Validate and adjust against user preferences
+    const originalNewTime = new Date(newTime);
+
+    // Check daily cap
+    const todayCount = await countRemindersToday(user.id, timezone);
+    if (todayCount >= prefs.max_reminders_per_day) {
+      // Defer to next day
+      newTime = getNextWorkingDay(newTime, prefs, timezone);
+      const [startHour, startMin] = prefs.working_hours_start.split(":").map(Number);
+      newTime.setHours(startHour, startMin, 0, 0);
+      wasAdjusted = true;
+      adjustmentReason = "daily_cap";
+    }
+
+    // Adjust for working hours, quiet hours, weekends
+    if (!isWithinWorkingHours(newTime, prefs, timezone)) {
+      newTime = adjustToWorkingHours(newTime, prefs, timezone);
+      wasAdjusted = true;
+      adjustmentReason = adjustmentReason || "working_hours";
+    }
+
+    if (isWithinQuietHours(newTime, prefs, timezone)) {
+      newTime = adjustToWorkingHours(newTime, prefs, timezone);
+      wasAdjusted = true;
+      adjustmentReason = adjustmentReason || "quiet_hours";
+    }
+
+    if (!prefs.allow_weekends && isWeekend(newTime, timezone)) {
+      newTime = getNextWorkingDay(newTime, prefs, timezone);
+      const [startHour, startMin] = prefs.working_hours_start.split(":").map(Number);
+      newTime.setHours(startHour, startMin, 0, 0);
+      wasAdjusted = true;
+      adjustmentReason = adjustmentReason || "weekend";
+    }
+
+    // Log reminder_deferred_by_rule if adjusted
+    if (wasAdjusted && originalTime && adjustmentReason) {
+      await logEvent({
+        userId: user.id,
+        eventType: "reminder_deferred_by_rule",
+        eventData: {
+          reminder_id: id,
+          original_time: originalTime.toISOString(),
+          adjusted_time: newTime.toISOString(),
+          reason: adjustmentReason,
+        },
+        source: "app",
+        reminderId: id,
+        contactId: reminder.contact_id || undefined,
+        useServiceClient: true,
+      });
+    }
+
+    // Log snooze_selected event
+    await logEvent({
+      userId: user.id,
+      eventType: "snooze_selected",
+      eventData: {
+        reminder_id: id,
+        selected_type: candidate_type || "manual",
+        scheduled_time: newTime.toISOString(),
+        was_recommended: was_recommended,
+        was_adjusted: wasAdjusted,
+      },
+      source: "app",
+      reminderId: id,
+      contactId: reminder.contact_id || undefined,
+      useServiceClient: true,
+    });
+
+    // Calculate minutes for logging
+    const calculatedMinutes = Math.round(
+      (newTime.getTime() - new Date(reminder.remind_at).getTime()) / 60000
+    );
 
     // Update reminder
     const { data: updatedReminder, error: updateError } = await supabase
@@ -65,10 +183,12 @@ export async function POST(
       eventType: "reminder_snoozed",
       eventData: {
         reminder_id: id,
-        duration_minutes: minutes,
+        duration_minutes: calculatedMinutes,
         original_remind_at: reminder.remind_at,
         new_remind_at: newTime.toISOString(),
         is_smart_suggestion: is_smart_suggestion,
+        was_adjusted: wasAdjusted,
+        adjustment_reason: adjustmentReason,
       },
       source: "app",
       reminderId: id,
@@ -83,7 +203,7 @@ export async function POST(
         eventResult.eventId,
         {
           reminder_id: id,
-          duration_minutes: minutes,
+          duration_minutes: calculatedMinutes,
         }
       );
     }
@@ -92,8 +212,14 @@ export async function POST(
     await logSnooze(
       user.id,
       id,
-      minutes,
-      is_smart_suggestion ? "smart_suggestion" : "user_action"
+      calculatedMinutes,
+      is_smart_suggestion ? "smart_suggestion" : "user_action",
+      {
+        candidate_type: candidate_type,
+        was_recommended: was_recommended,
+        was_adjusted: wasAdjusted,
+        adjustment_reason: adjustmentReason,
+      }
     );
 
     // Reschedule QStash job (works in local and production)

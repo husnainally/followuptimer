@@ -6,7 +6,8 @@ import { NotificationSettings } from "./notification-settings"
 import { PrivacySettings } from "./privacy-settings"
 import { AccountSettings } from "./account-settings"
 import { AffirmationSettings } from "./affirmation-settings"
-import { User, Bell, Lock, Trash2, Sparkles } from "lucide-react"
+import { SnoozeSettings } from "./snooze-settings"
+import { User, Bell, Lock, Trash2, Sparkles, Clock } from "lucide-react"
 
 
 export default function SettingsPage() {
@@ -16,7 +17,7 @@ export default function SettingsPage() {
       
       {/* Tabs Navigation */}
       <Tabs defaultValue="profile" className="w-full ">
-        <TabsList className="grid w-full grid-cols-5  border bg-white">
+        <TabsList className="grid w-full grid-cols-6  border bg-white">
           <TabsTrigger value="profile" className="flex gap-2">
             <User className="w-4 h-4" />
             <span className="hidden sm:inline">Profile</span>
@@ -28,6 +29,10 @@ export default function SettingsPage() {
           <TabsTrigger value="affirmations" className="flex gap-2">
             <Sparkles className="w-4 h-4" />
             <span className="hidden sm:inline">Affirmations</span>
+          </TabsTrigger>
+          <TabsTrigger value="snooze" className="flex gap-2">
+            <Clock className="w-4 h-4" />
+            <span className="hidden sm:inline">Snooze</span>
           </TabsTrigger>
           <TabsTrigger value="privacy" className="flex gap-2">
             <Lock className="w-4 h-4" />
@@ -49,6 +54,10 @@ export default function SettingsPage() {
 
         <TabsContent value="affirmations" className="mt-6">
           <AffirmationSettings />
+        </TabsContent>
+
+        <TabsContent value="snooze" className="mt-6">
+          <SnoozeSettings />
         </TabsContent>
 
         <TabsContent value="privacy" className="mt-6">

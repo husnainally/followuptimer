@@ -16,8 +16,18 @@ interface PopupData {
   payload?: Record<string, unknown>;
 }
 
+interface SnoozeCandidate {
+  type: string;
+  scheduledTime: string;
+  label: string;
+  score: number;
+  recommended?: boolean;
+  adjusted: boolean;
+}
+
 export function PopupSystem() {
   const [currentPopup, setCurrentPopup] = useState<PopupData | null>(null);
+  const [snoozeCandidates, setSnoozeCandidates] = useState<SnoozeCandidate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [uiState, setUiState] = useState<"entering" | "visible" | "exiting">("entering");
 
@@ -39,10 +49,43 @@ export function PopupSystem() {
         setUiState("entering");
         // let the browser paint, then settle to visible for smooth transitions
         requestAnimationFrame(() => setUiState("visible"));
+
+        // Fetch snooze suggestions if reminder_id exists
+        if (data.popup.reminder_id) {
+          fetchSnoozeSuggestions(data.popup.reminder_id, data.popup.payload);
+        } else {
+          setSnoozeCandidates([]);
+        }
       }
     } catch (error) {
       // Silently fail - popups are non-critical
       console.error("Failed to fetch popup:", error);
+    }
+  }
+
+  async function fetchSnoozeSuggestions(
+    reminderId: string,
+    payload?: Record<string, unknown>
+  ) {
+    try {
+      const eventType = payload?.source_event_type as string | undefined;
+      const url = new URL("/api/snooze/suggestions", window.location.origin);
+      url.searchParams.set("reminder_id", reminderId);
+      if (eventType) {
+        url.searchParams.set("event_type", eventType);
+      }
+
+      const response = await fetch(url.toString());
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (data.candidates && Array.isArray(data.candidates)) {
+        setSnoozeCandidates(data.candidates);
+      }
+    } catch (error) {
+      // Silently fail - suggestions are non-critical
+      console.error("Failed to fetch snooze suggestions:", error);
+      setSnoozeCandidates([]);
     }
   }
 
@@ -169,16 +212,45 @@ export function PopupSystem() {
         }
         onSnooze={
           canSnooze
-            ? (minutes) =>
+            ? (minutes, scheduledTime) => {
+                // Find the candidate that matches
+                const candidate = snoozeCandidates.find(
+                  (c) => c.scheduledTime === scheduledTime || 
+                  (scheduledTime && new Date(c.scheduledTime).getTime() === new Date(scheduledTime).getTime())
+                );
                 handleAction(
                   currentPopup.id,
                   "SNOOZE",
-                  { minutes, reminder_id: currentPopup.reminder_id },
-                  new Date(Date.now() + minutes * 60 * 1000).toISOString()
+                  {
+                    minutes,
+                    reminder_id: currentPopup.reminder_id,
+                    scheduled_time: scheduledTime,
+                    candidate_type: candidate?.type,
+                    was_recommended: candidate?.recommended || false,
+                  },
+                  scheduledTime || new Date(Date.now() + minutes * 60 * 1000).toISOString()
+                );
+              }
+            : undefined
+        }
+        onSnoozeWithTime={
+          canSnooze
+            ? (scheduledTime) =>
+                handleAction(
+                  currentPopup.id,
+                  "SNOOZE",
+                  {
+                    reminder_id: currentPopup.reminder_id,
+                    scheduled_time: scheduledTime.toISOString(),
+                    candidate_type: "pick_a_time",
+                    was_recommended: false,
+                  },
+                  scheduledTime.toISOString()
                 )
             : undefined
         }
-        snoozeOptions={canSnooze ? snoozeOptions : undefined}
+        snoozeOptions={canSnooze && snoozeCandidates.length === 0 ? snoozeOptions : undefined}
+        snoozeCandidates={canSnooze && snoozeCandidates.length > 0 ? snoozeCandidates : undefined}
         onMarkDone={
           currentPopup.reminder_id
             ? () =>

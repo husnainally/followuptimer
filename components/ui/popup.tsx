@@ -4,6 +4,8 @@ import * as React from "react";
 import { X, Check, Clock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { SnoozeSuggestions } from "@/components/ui/snooze-suggestions";
 import { cn } from "@/lib/utils";
 
 export type PopupTemplateType = "success" | "streak" | "inactivity" | "follow_up_required";
@@ -15,8 +17,17 @@ export interface PopupProps {
   message: string;
   affirmation?: string;
   onFollowUpNow?: () => void;
-  onSnooze?: (minutes: number) => void;
+  onSnooze?: (minutes: number, scheduledTime?: string) => void;
+  onSnoozeWithTime?: (scheduledTime: Date) => void;
   snoozeOptions?: Array<{ label: string; minutes: number }>;
+  snoozeCandidates?: Array<{
+    type: string;
+    scheduledTime: string;
+    label: string;
+    score: number;
+    recommended?: boolean;
+    adjusted: boolean;
+  }>;
   onMarkDone?: () => void;
   onDismiss?: () => void;
   isLoading?: boolean;
@@ -123,21 +134,54 @@ export function Popup({
               Follow up now
             </Button>
           )}
-          {onSnooze &&
-            (snoozeOptions?.length ? snoozeOptions : [{ label: "Snooze 1h", minutes: 60 }]).map(
-              (opt) => (
-                <Button
-                  key={opt.label}
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onSnooze(opt.minutes)}
-                  disabled={isLoading}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  {opt.label}
-                </Button>
-              )
-            )}
+          {onSnooze && snoozeCandidates && snoozeCandidates.length > 0 ? (
+            <SnoozeSuggestions
+              candidates={snoozeCandidates}
+              onSelect={(candidate) => {
+                if (candidate.type === "pick_a_time") {
+                  // This will be handled by SnoozeSuggestions component
+                  return;
+                }
+                // Calculate minutes from now to scheduled time
+                const scheduledTime = new Date(candidate.scheduledTime);
+                const now = new Date();
+                const minutes = Math.round(
+                  (scheduledTime.getTime() - now.getTime()) / (1000 * 60)
+                );
+                onSnooze(minutes, candidate.scheduledTime);
+              }}
+              onPickTime={(time) => {
+                if (onSnoozeWithTime) {
+                  onSnoozeWithTime(time);
+                } else {
+                  // Fallback: calculate minutes
+                  const now = new Date();
+                  const minutes = Math.round(
+                    (time.getTime() - now.getTime()) / (1000 * 60)
+                  );
+                  onSnooze(minutes, time.toISOString());
+                }
+              }}
+              isLoading={isLoading}
+            />
+          ) : (
+            onSnooze &&
+            (snoozeOptions?.length
+              ? snoozeOptions
+              : [{ label: "Snooze 1h", minutes: 60 }]
+            ).map((opt) => (
+              <Button
+                key={opt.label}
+                size="sm"
+                variant="outline"
+                onClick={() => onSnooze(opt.minutes)}
+                disabled={isLoading}
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                {opt.label}
+              </Button>
+            ))
+          )}
           {onMarkDone && (
             <Button size="sm" variant="outline" onClick={onMarkDone} disabled={isLoading}>
               <Check className="h-4 w-4 mr-2" />
