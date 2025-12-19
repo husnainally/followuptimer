@@ -338,12 +338,25 @@ async function handler(request: Request) {
     // Log reminder_completed event when reminder is successfully sent
     if (overallSuccess) {
       const { logEvent } = await import("@/lib/events");
+      // Fetch contact name if contact_id exists
+      let contactName: string | undefined;
+      if (reminder.contact_id) {
+        const { data: contact } = await supabase
+          .from("contacts")
+          .select("name")
+          .eq("id", reminder.contact_id)
+          .single();
+        contactName = contact?.name;
+      }
+
       const eventResult = await logEvent({
         userId: reminder.user_id,
         eventType: "reminder_completed",
         eventData: {
           reminder_id: reminderId,
           notification_method: reminder.notification_method,
+          message: reminder.message,
+          contact_name: contactName,
         },
         source: "scheduler",
         reminderId: reminderId,
@@ -364,6 +377,22 @@ async function handler(request: Request) {
           eventResult.eventId!,
           { reminder_id: reminderId }
         );
+
+        // Create popup from reminder_completed event
+        const { createPopupsFromEvent } = await import("@/lib/popup-engine");
+        await createPopupsFromEvent({
+          userId: reminder.user_id,
+          eventId: eventResult.eventId!,
+          eventType: "reminder_completed",
+          eventData: {
+            reminder_id: reminderId,
+            notification_method: reminder.notification_method,
+            message: reminder.message,
+            contact_name: contactName,
+          },
+          contactId: reminder.contact_id || undefined,
+          reminderId: reminderId,
+        });
       }
     }
 

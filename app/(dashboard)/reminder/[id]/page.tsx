@@ -1,35 +1,49 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useState } from "react"
-import { useRouter, useParams } from "next/navigation"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { format } from "date-fns"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Form } from "@/components/ui/form"
-import { reminderSchema, type ReminderFormData } from "@/lib/schemas"
-import { Calendar as CalendarIcon, Trash2, AlertCircle } from "lucide-react"
-import { ControlledTextarea } from "@/components/controlled-textarea"
-import { toast } from "sonner"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { format } from "date-fns";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Form } from "@/components/ui/form";
+import { reminderSchema, type ReminderFormData } from "@/lib/schemas";
+import { Calendar as CalendarIcon, Trash2, AlertCircle } from "lucide-react";
+import { ControlledTextarea } from "@/components/controlled-textarea";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 export default function ReminderDetailPage() {
-  const router = useRouter()
-  const params = useParams()
-  const reminderId = params?.id as string
-  const [isLoading, setIsLoading] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [meta, setMeta] = useState<{ created_at?: Date; updated_at?: Date; status?: string } | null>(null)
+  const router = useRouter();
+  const params = useParams();
+  const reminderId = params?.id as string;
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<{
+    created_at?: Date;
+    updated_at?: Date;
+    status?: string;
+  } | null>(null);
 
   const form = useForm<ReminderFormData>({
     resolver: zodResolver(reminderSchema),
@@ -40,10 +54,12 @@ export default function ReminderDetailPage() {
       notification_method: "email",
       affirmation_enabled: false,
     },
-  })
-  const initialDate = new Date(Date.now() + 60 * 60 * 1000)
-  const [dateValue, setDateValue] = useState<Date>(initialDate)
-  const [timeValue, setTimeValue] = useState<string>(format(initialDate, "HH:mm"))
+  });
+  const initialDate = new Date(Date.now() + 60 * 60 * 1000);
+  const [dateValue, setDateValue] = useState<Date>(initialDate);
+  const [timeValue, setTimeValue] = useState<string>(
+    format(initialDate, "HH:mm")
+  );
 
   const formatDisplayDate = (date: Date) =>
     new Intl.DateTimeFormat("en-US", {
@@ -52,22 +68,24 @@ export default function ReminderDetailPage() {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    }).format(new Date(date))
+    }).format(new Date(date));
 
   const loadReminder = useCallback(async () => {
-    if (!reminderId) return
-    setInitialLoading(true)
-    setLoadError(null)
+    if (!reminderId) return;
+    setInitialLoading(true);
+    setLoadError(null);
     try {
-      const response = await fetch(`/api/reminders/${reminderId}`)
-      const payload = await response.json()
+      const response = await fetch(`/api/reminders/${reminderId}`);
+      const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload?.error || "Failed to load reminder")
+        throw new Error(payload?.error || "Failed to load reminder");
       }
 
-      const reminder = payload?.reminder
-      const remindAtDate = reminder?.remind_at ? new Date(reminder.remind_at) : new Date()
+      const reminder = payload?.reminder;
+      const remindAtDate = reminder?.remind_at
+        ? new Date(reminder.remind_at)
+        : new Date();
 
       form.reset({
         message: reminder?.message ?? "",
@@ -75,47 +93,57 @@ export default function ReminderDetailPage() {
         tone: reminder?.tone ?? "motivational",
         notification_method: reminder?.notification_method ?? "email",
         affirmation_enabled: reminder?.affirmation_enabled ?? false,
-      })
-      setDateValue(remindAtDate)
-      setTimeValue(format(remindAtDate, "HH:mm"))
+      });
+      setDateValue(remindAtDate);
+      setTimeValue(format(remindAtDate, "HH:mm"));
 
       setMeta({
-        created_at: reminder?.created_at ? new Date(reminder.created_at) : undefined,
-        updated_at: reminder?.updated_at ? new Date(reminder.updated_at) : undefined,
+        created_at: reminder?.created_at
+          ? new Date(reminder.created_at)
+          : undefined,
+        updated_at: reminder?.updated_at
+          ? new Date(reminder.updated_at)
+          : undefined,
         status: reminder?.status,
-      })
+      });
     } catch (error: any) {
-      const message = error?.message || "Failed to load reminder"
-      setLoadError(message)
-      toast.error(message)
+      const message = error?.message || "Failed to load reminder";
+      setLoadError(message);
+      toast.error(message);
     } finally {
-      setInitialLoading(false)
+      setInitialLoading(false);
     }
-  }, [reminderId, form])
+  }, [reminderId, form]);
 
   useEffect(() => {
-    loadReminder()
-  }, [loadReminder])
+    loadReminder();
+  }, [loadReminder]);
 
   useEffect(() => {
-    if (!dateValue || !timeValue) return
-    const [hours, minutes] = timeValue.split(":").map(Number)
-    const nextDate = new Date(dateValue)
-    nextDate.setHours(hours ?? 0, minutes ?? 0, 0, 0)
-    form.setValue("remind_at", nextDate, { shouldValidate: true })
-  }, [dateValue, timeValue, form])
+    if (!dateValue || !timeValue) return;
+    const [hours, minutes] = timeValue.split(":").map(Number);
+    const nextDate = new Date(dateValue);
+    nextDate.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+    form.setValue("remind_at", nextDate, { shouldValidate: true });
+  }, [dateValue, timeValue, form]);
 
-  const toneValue = form.watch("tone")
-  const createdAtDisplay = meta?.created_at ? formatDisplayDate(meta.created_at) : "—"
-  const updatedAtDisplay = meta?.updated_at ? formatDisplayDate(meta.updated_at) : "—"
-  const statusDisplay = meta?.status ? meta.status.replace("_", " ") : "pending"
+  const toneValue = form.watch("tone");
+  const createdAtDisplay = meta?.created_at
+    ? formatDisplayDate(meta.created_at)
+    : "—";
+  const updatedAtDisplay = meta?.updated_at
+    ? formatDisplayDate(meta.updated_at)
+    : "—";
+  const statusDisplay = meta?.status
+    ? meta.status.replace("_", " ")
+    : "pending";
 
   if (!reminderId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <p className="text-destructive">Invalid reminder ID</p>
       </div>
-    )
+    );
   }
 
   if (initialLoading) {
@@ -171,7 +199,7 @@ export default function ReminderDetailPage() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (loadError) {
@@ -185,70 +213,82 @@ export default function ReminderDetailPage() {
           <Button onClick={loadReminder}>Retry</Button>
         </div>
       </div>
-    )
+    );
   }
 
   const onSubmit = async (data: ReminderFormData) => {
-    if (!reminderId) return
-    setIsLoading(true)
-    const toastId = toast.loading("Updating reminder...")
+    if (!reminderId) return;
+    setIsLoading(true);
+    const toastId = toast.loading("Updating reminder...");
     try {
       const response = await fetch(`/api/reminders/${reminderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
-          remind_at: data.remind_at instanceof Date ? data.remind_at.toISOString() : data.remind_at,
+          remind_at:
+            data.remind_at instanceof Date
+              ? data.remind_at.toISOString()
+              : data.remind_at,
         }),
-      })
+      });
 
-      const payload = await response.json()
+      const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload?.error || "Failed to update reminder")
+        throw new Error(payload?.error || "Failed to update reminder");
       }
 
-      const reminder = payload?.reminder
+      const reminder = payload?.reminder;
       if (reminder) {
         setMeta({
-          created_at: reminder?.created_at ? new Date(reminder.created_at) : meta?.created_at,
-          updated_at: reminder?.updated_at ? new Date(reminder.updated_at) : new Date(),
+          created_at: reminder?.created_at
+            ? new Date(reminder.created_at)
+            : meta?.created_at,
+          updated_at: reminder?.updated_at
+            ? new Date(reminder.updated_at)
+            : new Date(),
           status: reminder?.status ?? meta?.status,
-        })
+        });
       }
 
-      toast.success("Reminder updated", { id: toastId })
-      router.refresh()
+      toast.success("Reminder updated", { id: toastId });
+      router.refresh();
     } catch (error: any) {
-      toast.error(error?.message || "Failed to update reminder", { id: toastId })
+      toast.error(error?.message || "Failed to update reminder", {
+        id: toastId,
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleDelete = async () => {
-    if (!reminderId) return
-    setIsDeleting(true)
-    const toastId = toast.loading("Deleting reminder...")
+    if (!reminderId) return;
+    setIsDeleting(true);
+    const toastId = toast.loading("Deleting reminder...");
     try {
-      const response = await fetch(`/api/reminders/${reminderId}`, { method: "DELETE" })
-      const payload = await response.json().catch(() => null)
+      const response = await fetch(`/api/reminders/${reminderId}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error || "Failed to delete reminder")
+        throw new Error(payload?.error || "Failed to delete reminder");
       }
 
-      toast.success("Reminder deleted", { id: toastId })
-      router.push("/reminder")
-      router.refresh()
+      toast.success("Reminder deleted", { id: toastId });
+      router.push("/reminder");
+      router.refresh();
     } catch (error: any) {
-      toast.error(error?.message || "Failed to delete reminder", { id: toastId })
-      setIsDeleting(false)
+      toast.error(error?.message || "Failed to delete reminder", {
+        id: toastId,
+      });
+      setIsDeleting(false);
     }
-  }
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Header with Back Button */}
-     
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form Card */}
@@ -260,7 +300,10 @@ export default function ReminderDetailPage() {
             </CardHeader>
             <CardContent className="pt-6">
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
                   {/* Message Input */}
                   <ControlledTextarea
                     name="message"
@@ -279,7 +322,10 @@ export default function ReminderDetailPage() {
                     </label>
                     <div className="flex flex-col gap-4 md:flex-row">
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="remind-date" className="px-1 text-xs uppercase text-muted-foreground tracking-wide">
+                        <Label
+                          htmlFor="remind-date"
+                          className="px-1 text-xs uppercase text-muted-foreground tracking-wide"
+                        >
                           Date
                         </Label>
                         <Popover>
@@ -293,11 +339,16 @@ export default function ReminderDetailPage() {
                                 !dateValue && "text-muted-foreground"
                               )}
                             >
-                              {dateValue ? format(dateValue, "PPP") : "Select date"}
+                              {dateValue
+                                ? format(dateValue, "PPP")
+                                : "Select date"}
                               <CalendarIcon className="h-4 w-4 opacity-70" />
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                          <PopoverContent
+                            className="w-auto overflow-hidden p-0"
+                            align="start"
+                          >
                             <Calendar
                               mode="single"
                               selected={dateValue}
@@ -310,7 +361,10 @@ export default function ReminderDetailPage() {
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="remind-time" className="px-1 text-xs uppercase text-muted-foreground tracking-wide">
+                        <Label
+                          htmlFor="remind-time"
+                          className="px-1 text-xs uppercase text-muted-foreground tracking-wide"
+                        >
                           Time
                         </Label>
                         <Input
@@ -324,7 +378,9 @@ export default function ReminderDetailPage() {
                       </div>
                     </div>
                     {form.formState.errors.remind_at && (
-                      <p className="text-sm text-destructive">{form.formState.errors.remind_at.message}</p>
+                      <p className="text-sm text-destructive">
+                        {form.formState.errors.remind_at.message}
+                      </p>
                     )}
                   </div>
 
@@ -334,7 +390,9 @@ export default function ReminderDetailPage() {
                       Affirmation Tone <span className="text-red-500">*</span>
                     </label>
                     <div className="grid grid-cols-3 gap-3">
-                      {(["motivational", "professional", "playful"] as const).map((tone) => (
+                      {(
+                        ["motivational", "professional", "playful"] as const
+                      ).map((tone) => (
                         <button
                           key={tone}
                           type="button"
@@ -353,10 +411,18 @@ export default function ReminderDetailPage() {
 
                   {/* Actions */}
                   <div className="flex gap-3 pt-4 border-t border-border">
-                    <Button type="button" variant="outline" onClick={() => router.back()}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => router.back()}
+                    >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={isLoading} className="flex-1">
+                    <Button
+                      type="submit"
+                      disabled={isLoading}
+                      className="flex-1"
+                    >
                       {isLoading ? "Saving..." : "Save Changes"}
                     </Button>
                   </div>
@@ -373,20 +439,33 @@ export default function ReminderDetailPage() {
             <CardContent className="space-y-3 pt-6">
               <p className="text-sm font-medium">Reminder Info</p>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase">Created</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase">
+                  Created
+                </p>
                 <p className="text-sm mt-1">{createdAtDisplay}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase">Last Updated</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase">
+                  Last Updated
+                </p>
                 <p className="text-sm mt-1">{updatedAtDisplay}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase">Tone</p>
-                <Badge className="mt-2 capitalize bg-primary/10 text-primary border-0">{toneValue}</Badge>
+                <p className="text-xs font-medium text-muted-foreground uppercase">
+                  Tone
+                </p>
+                <Badge className="mt-2 capitalize bg-primary/10 text-primary border-0">
+                  {toneValue}
+                </Badge>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase">Status</p>
-                <Badge variant="outline" className="mt-2 capitalize border-border/60">
+                <p className="text-xs font-medium text-muted-foreground uppercase">
+                  Status
+                </p>
+                <Badge
+                  variant="outline"
+                  className="mt-2 capitalize border-border/60"
+                >
                   {statusDisplay}
                 </Badge>
               </div>
@@ -444,5 +523,5 @@ export default function ReminderDetailPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
