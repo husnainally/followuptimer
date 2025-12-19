@@ -1,7 +1,11 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { type EventType } from "@/lib/events";
 
-export type PopupActionType = "FOLLOW_UP_NOW" | "SNOOZE" | "MARK_DONE" | "DISMISS";
+export type PopupActionType =
+  | "FOLLOW_UP_NOW"
+  | "SNOOZE"
+  | "MARK_DONE"
+  | "DISMISS";
 
 type PopupInstanceStatus =
   | "queued"
@@ -14,7 +18,11 @@ type PopupInstanceStatus =
   | "action_taken"
   | "expired";
 
-export type PopupTemplateKey = "email_opened" | "reminder_due" | "no_reply_after_n_days";
+export type PopupTemplateKey =
+  | "email_opened"
+  | "reminder_due"
+  | "reminder_completed"
+  | "no_reply_after_n_days";
 
 export interface PopupRuleRow {
   id: string;
@@ -44,6 +52,7 @@ function isTriggerEventType(eventType: EventType): boolean {
   return (
     eventType === "email_opened" ||
     eventType === "reminder_due" ||
+    eventType === "reminder_completed" ||
     eventType === "no_reply_after_n_days"
   );
 }
@@ -58,7 +67,9 @@ function nowIso() {
 }
 
 function startOfDayUtc(d: Date) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0)
+  );
 }
 
 function buildTemplatePayload(args: {
@@ -106,8 +117,25 @@ function buildTemplatePayload(args: {
         message: `Follow-up due: ${contactName}.`,
         payload: basePayload,
       };
+    case "reminder_completed": {
+      const reminderMessage = safeString(args.eventData.message, "");
+      const messagePreview =
+        reminderMessage.length > 50
+          ? reminderMessage.substring(0, 50) + "..."
+          : reminderMessage;
+      const contactPart =
+        contactName !== "this contact" ? ` to ${contactName}` : "";
+      return {
+        title: "Reminder sent",
+        message: `Your reminder${contactPart} has been sent.${
+          reminderMessage ? ` "${messagePreview}"` : ""
+        }`,
+        payload: basePayload,
+      };
+    }
     case "no_reply_after_n_days": {
-      const days = typeof args.eventData.days === "number" ? args.eventData.days : null;
+      const days =
+        typeof args.eventData.days === "number" ? args.eventData.days : null;
       const suffix = days ? ` after ${days} days` : "";
       return {
         title: "No reply yet",
@@ -158,6 +186,18 @@ async function ensureDefaultPopupRules(userId: string): Promise<void> {
     },
     {
       user_id: userId,
+      rule_name: "Reminder completed popup",
+      trigger_event_type: "reminder_completed",
+      template_key: "reminder_completed",
+      priority: 7,
+      cooldown_seconds: 60 * 5,
+      max_per_day: 20,
+      ttl_seconds: 60 * 60 * 24,
+      enabled: true,
+      conditions: { require_reminder_id: true },
+    },
+    {
+      user_id: userId,
       rule_name: "No reply after N days popup",
       trigger_event_type: "no_reply_after_n_days",
       template_key: "no_reply_after_n_days",
@@ -170,7 +210,9 @@ async function ensureDefaultPopupRules(userId: string): Promise<void> {
     },
   ];
 
-  const { error: insertError } = await supabase.from("popup_rules").insert(defaults);
+  const { error: insertError } = await supabase
+    .from("popup_rules")
+    .insert(defaults);
   if (insertError) throw insertError;
 }
 
@@ -189,7 +231,11 @@ async function passesEligibility(args: {
     .eq("id", args.userId)
     .single();
 
-  if (profile?.plan_status && profile.plan_status !== "active" && profile.plan_status !== "trial") {
+  if (
+    profile?.plan_status &&
+    profile.plan_status !== "active" &&
+    profile.plan_status !== "trial"
+  ) {
     return { ok: false, reason: "plan_inactive" };
   }
 
@@ -221,7 +267,9 @@ async function passesEligibility(args: {
       ? (conditions.global_cooldown_seconds as number)
       : 60;
   if (globalCooldownSeconds > 0) {
-    const cutoff = new Date(Date.now() - globalCooldownSeconds * 1000).toISOString();
+    const cutoff = new Date(
+      Date.now() - globalCooldownSeconds * 1000
+    ).toISOString();
     const { data: recent } = await supabase
       .from("popups")
       .select("id")
@@ -229,7 +277,8 @@ async function passesEligibility(args: {
       .in("status", ["displayed", "shown"])
       .gte("displayed_at", cutoff)
       .limit(1);
-    if (recent && recent.length > 0) return { ok: false, reason: "global_cooldown" };
+    if (recent && recent.length > 0)
+      return { ok: false, reason: "global_cooldown" };
   }
 
   // Per-rule cooldown
@@ -241,10 +290,17 @@ async function passesEligibility(args: {
       .select("id")
       .eq("user_id", args.userId)
       .eq("rule_id", args.rule.id)
-      .in("status", ["displayed", "shown", "acted", "action_taken", "dismissed"])
+      .in("status", [
+        "displayed",
+        "shown",
+        "acted",
+        "action_taken",
+        "dismissed",
+      ])
       .gte("displayed_at", cutoff)
       .limit(1);
-    if (recent && recent.length > 0) return { ok: false, reason: "rule_cooldown" };
+    if (recent && recent.length > 0)
+      return { ok: false, reason: "rule_cooldown" };
   }
 
   // Per-entity cap (per day)
@@ -257,13 +313,16 @@ async function passesEligibility(args: {
       .eq("rule_id", args.rule.id)
       .eq("contact_id", args.contactId)
       .gte("queued_at", start);
-    if ((count || 0) >= args.rule.max_per_day) return { ok: false, reason: "entity_cap" };
+    if ((count || 0) >= args.rule.max_per_day)
+      return { ok: false, reason: "entity_cap" };
   }
 
   return { ok: true };
 }
 
-export async function createPopupsFromEvent(input: CreatePopupFromEventInput): Promise<void> {
+export async function createPopupsFromEvent(
+  input: CreatePopupFromEventInput
+): Promise<void> {
   if (!isTriggerEventType(input.eventType)) return;
 
   const supabase = createServiceClient();
@@ -303,7 +362,9 @@ export async function createPopupsFromEvent(input: CreatePopupFromEventInput): P
       reminderId: input.reminderId,
     });
 
-    const expiresAt = new Date(Date.now() + Math.max(0, rule.ttl_seconds || 0) * 1000).toISOString();
+    const expiresAt = new Date(
+      Date.now() + Math.max(0, rule.ttl_seconds || 0) * 1000
+    ).toISOString();
 
     const { error: insertError } = await supabase
       .from("popups")
@@ -329,7 +390,10 @@ export async function createPopupsFromEvent(input: CreatePopupFromEventInput): P
     // If insert fails due to dedupe unique constraint, silently ignore.
     if (insertError) {
       const msg = insertError.message || "";
-      if (msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("unique")) {
+      if (
+        msg.toLowerCase().includes("duplicate") ||
+        msg.toLowerCase().includes("unique")
+      ) {
         return;
       }
       throw insertError;
@@ -338,5 +402,3 @@ export async function createPopupsFromEvent(input: CreatePopupFromEventInput): P
     return;
   }
 }
-
-
