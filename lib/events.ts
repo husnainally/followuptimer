@@ -25,7 +25,9 @@ export type EventType =
   | "no_reply_after_n_days"
   | "linkedin_profile_viewed"
   | "linkedin_message_sent"
-  | "affirmation_shown";
+  | "affirmation_shown"
+  | "affirmation_suppressed"
+  | "affirmation_action_clicked";
 
 export type EventSource = "app" | "scheduler" | "extension_gmail" | "extension_linkedin";
 

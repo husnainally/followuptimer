@@ -76,6 +76,26 @@ export async function POST(
 
     if (updateError) throw updateError;
 
+    // Log affirmation_action_clicked if popup had affirmation (for correlation analysis)
+    const hadAffirmation = !!popup.affirmation;
+    if (hadAffirmation) {
+      await logEvent({
+        userId: user.id,
+        eventType: "affirmation_action_clicked",
+        eventData: {
+          popup_id: id,
+          popup_instance_id: id,
+          action: normalizedAction,
+          had_affirmation: true,
+          affirmation_id: null, // Could extract from popup if needed
+        },
+        source: "app",
+        reminderId: popup.reminder_id || undefined,
+        contactId: popup.contact_id || undefined,
+        useServiceClient: true,
+      });
+    }
+
     // Record action
     const { error: actionError } = await supabase
       .from("popup_actions")

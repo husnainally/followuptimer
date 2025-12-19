@@ -15,6 +15,15 @@ export interface AffirmationResult {
   affirmation_id: string;
 }
 
+export type SuppressionReason =
+  | "disabled_by_user"
+  | "cooldown_active"
+  | "daily_limit_reached"
+  | "category_disabled"
+  | "no_candidates_available"
+  | "context_not_allowed"
+  | "other";
+
 interface AffirmationContext {
   popupType?: string;
   eventType?: string;
@@ -42,6 +51,7 @@ export async function getAffirmationForUser(
       .single();
 
     if (!profile?.affirmation_frequency) {
+      await logSuppression(userId, "disabled_by_user", context, popupId);
       return null; // Affirmations disabled
     }
 
@@ -51,12 +61,26 @@ export async function getAffirmationForUser(
     // 3. Check global cooldown
     const cooldownCheck = await checkGlobalCooldown(userId, preferences.global_cooldown_minutes);
     if (!cooldownCheck.allowed) {
+      await logSuppression(
+        userId,
+        "cooldown_active",
+        context,
+        popupId,
+        { minutes_remaining: Math.ceil(preferences.global_cooldown_minutes - (cooldownCheck.lastShown ? (Date.now() - new Date(cooldownCheck.lastShown).getTime()) / (1000 * 60) : 0)) }
+      );
       return null;
     }
 
     // 4. Check daily cap
     const dailyCapCheck = await checkDailyCap(userId, preferences.daily_cap);
     if (!dailyCapCheck.allowed) {
+      await logSuppression(
+        userId,
+        "daily_limit_reached",
+        context,
+        popupId,
+        { count_today: dailyCapCheck.countToday, daily_cap: preferences.daily_cap }
+      );
       return null;
     }
 
@@ -64,6 +88,7 @@ export async function getAffirmationForUser(
     const allowedCategories = getCategoriesForContext(context, preferences);
 
     if (allowedCategories.length === 0) {
+      await logSuppression(userId, "category_disabled", context, popupId);
       return null; // No categories enabled
     }
 
@@ -78,22 +103,27 @@ export async function getAffirmationForUser(
     );
 
     if (!affirmation) {
+      await logSuppression(userId, "no_candidates_available", context, popupId);
       return null; // No available affirmations
     }
 
     // 8. Record usage
     await recordAffirmationUsage(userId, affirmation.id, popupId, affirmation.category);
 
-    // 9. Log event
+    // 9. Log event with enhanced fields
     await logEvent({
       userId,
       eventType: "affirmation_shown",
       eventData: {
         affirmation_id: affirmation.id,
         category: affirmation.category,
+        context_type: context?.eventType || context?.popupType || "unknown",
         popup_id: popupId,
+        popup_instance_id: popupId,
         reminder_id: context?.reminderId,
         contact_id: context?.contactId,
+        delivery_channel: "popup",
+        cooldown_state: "allowed",
       },
       source: "app",
       reminderId: context?.reminderId,
@@ -361,5 +391,39 @@ async function recordAffirmationUsage(
     popup_id: popupId || null,
     category,
   });
+}
+
+/**
+ * Log suppression event when affirmation is not shown
+ */
+async function logSuppression(
+  userId: string,
+  reason: SuppressionReason,
+  context: AffirmationContext | undefined,
+  popupId: string | undefined,
+  additionalData?: Record<string, unknown>
+): Promise<void> {
+  try {
+    await logEvent({
+      userId,
+      eventType: "affirmation_suppressed",
+      eventData: {
+        reason,
+        context_type: context?.eventType || context?.popupType || "unknown",
+        popup_id: popupId,
+        popup_instance_id: popupId,
+        reminder_id: context?.reminderId,
+        contact_id: context?.contactId,
+        ...additionalData,
+      },
+      source: "app",
+      reminderId: context?.reminderId,
+      contactId: context?.contactId,
+      useServiceClient: true,
+    });
+  } catch (error) {
+    console.error("Failed to log suppression event:", error);
+    // Fail silently - suppression logging is non-critical
+  }
 }
 
