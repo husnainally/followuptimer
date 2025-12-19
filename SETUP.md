@@ -7,6 +7,7 @@ A Next.js reminder app with affirmations, powered by Supabase, Resend, and QStas
 
 
 
+
 ### Prerequisites  
 
 - Node.js 18+ installed
