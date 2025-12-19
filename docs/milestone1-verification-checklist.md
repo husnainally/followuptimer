@@ -71,10 +71,11 @@
 
 ### 7. API Validation ✅
 - [x] `app/api/events/route.ts` updated
-  - [x] Validates `event_type` against allowed values
+  - [x] Validates `event_type` against allowed values (includes all 23 event types)
   - [x] Validates `source` field
   - [x] Accepts `contact_id` and `reminder_id`
   - [x] Automatically processes events for triggers
+  - [x] Fixed: Added missing `task_completed` event type to validation array
 - [x] GET endpoint for querying events with filters
 
 ### 8. Documentation ✅
@@ -88,14 +89,17 @@
 
 ## ⚠️ Known Issues / Notes
 
-### 1. Database Types File
-- **Status**: `lib/types/database.types.ts` has outdated event types
-- **Impact**: TypeScript may show type errors for new event types
-- **Solution**: Regenerate types from Supabase after running migrations:
+### 1. Database Types File ✅ FIXED
+- **Status**: `lib/types/database.types.ts` has been updated with all event types and missing columns
+- **Fixed**: 
+  - Added all 23 event types to `event_type` enum (including Milestone 2 types for future-proofing)
+  - Added missing columns: `source`, `contact_id`, `reminder_id` to `events` table types
+  - Added `behaviour_triggers` table type definition
+  - Updated `behaviour_rules.trigger_event_type` to include all event types
+- **Note**: Types are now aligned with database schema. If schema changes in future, regenerate types from Supabase:
   ```bash
   npx supabase gen types typescript --project-id YOUR_PROJECT_ID > lib/types/database.types.ts
   ```
-- **Note**: This is expected - types should be regenerated after schema changes
 
 ### 2. Migration Order
 - **Status**: Migration `20241201000008_milestone1_events_enhancement.sql` references `contacts` table
@@ -154,7 +158,17 @@ The event system is ready for Milestone 2 to consume triggers and display popups
 **Action Items Before Production:**
 1. Set up cron jobs for scheduled endpoints (Vercel Cron, Supabase Cron, or external scheduler)
 2. Add environment variables for cron secrets
-3. Regenerate database types from Supabase
+3. ~~Regenerate database types from Supabase~~ ✅ **COMPLETED** - Types updated manually to match schema
 4. Test all event logging flows
 5. Monitor trigger creation in production
+
+## 🔧 Recent Fixes (Post-Implementation Review)
+
+### Type Safety Fixes (Completed)
+- ✅ Updated `lib/types/database.types.ts` with all 23 event types
+- ✅ Added missing columns (`source`, `contact_id`, `reminder_id`) to events table types
+- ✅ Added `behaviour_triggers` table type definition
+- ✅ Fixed API validation to include all event types (added missing `task_completed`)
+- ✅ Verified all event types in code exist in database migrations
+- ✅ All TypeScript types now align with database schema
 
