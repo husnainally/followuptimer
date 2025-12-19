@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getUserSnoozePreferences } from "@/lib/snooze-rules";
+import { logEvent } from "@/lib/events";
 
 // GET /api/snooze/preferences - Get user snooze preferences
 export async function GET(request: Request) {
@@ -51,7 +52,11 @@ export async function POST(request: Request) {
       allow_weekends,
       default_snooze_options,
       follow_up_cadence,
+      smart_suggestions_enabled,
     } = body;
+
+    // Get existing preferences to track changes
+    const existingPrefs = await getUserSnoozePreferences(user.id);
 
     // Validate working days array
     if (
@@ -93,6 +98,10 @@ export async function POST(request: Request) {
             allow_weekends !== undefined ? allow_weekends : undefined,
           default_snooze_options: default_snooze_options || undefined,
           follow_up_cadence: follow_up_cadence || undefined,
+          smart_suggestions_enabled:
+            smart_suggestions_enabled !== undefined
+              ? smart_suggestions_enabled
+              : undefined,
           updated_at: new Date().toISOString(),
         },
         {
@@ -103,6 +112,96 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
+
+    // Log preference changes
+    const changes: Array<{ key: string; old_value: unknown; new_value: unknown }> = [];
+
+    if (
+      working_hours_start !== undefined &&
+      working_hours_start !== existingPrefs.working_hours_start
+    ) {
+      changes.push({
+        key: "working_hours_start",
+        old_value: existingPrefs.working_hours_start,
+        new_value: working_hours_start,
+      });
+    }
+    if (
+      working_hours_end !== undefined &&
+      working_hours_end !== existingPrefs.working_hours_end
+    ) {
+      changes.push({
+        key: "working_hours_end",
+        old_value: existingPrefs.working_hours_end,
+        new_value: working_hours_end,
+      });
+    }
+    if (
+      working_days !== undefined &&
+      JSON.stringify(working_days) !== JSON.stringify(existingPrefs.working_days)
+    ) {
+      changes.push({
+        key: "working_days",
+        old_value: existingPrefs.working_days,
+        new_value: working_days,
+      });
+    }
+    if (
+      max_reminders_per_day !== undefined &&
+      max_reminders_per_day !== existingPrefs.max_reminders_per_day
+    ) {
+      changes.push({
+        key: "max_reminders_per_day",
+        old_value: existingPrefs.max_reminders_per_day,
+        new_value: max_reminders_per_day,
+      });
+    }
+    if (
+      allow_weekends !== undefined &&
+      allow_weekends !== existingPrefs.allow_weekends
+    ) {
+      changes.push({
+        key: "allow_weekends",
+        old_value: existingPrefs.allow_weekends,
+        new_value: allow_weekends,
+      });
+    }
+    if (
+      smart_suggestions_enabled !== undefined &&
+      smart_suggestions_enabled !== existingPrefs.smart_suggestions_enabled
+    ) {
+      changes.push({
+        key: "smart_suggestions_enabled",
+        old_value: existingPrefs.smart_suggestions_enabled,
+        new_value: smart_suggestions_enabled,
+      });
+    }
+    if (
+      follow_up_cadence !== undefined &&
+      follow_up_cadence !== existingPrefs.follow_up_cadence
+    ) {
+      changes.push({
+        key: "follow_up_cadence",
+        old_value: existingPrefs.follow_up_cadence,
+        new_value: follow_up_cadence,
+      });
+    }
+
+    // Log each preference change
+    for (const change of changes) {
+      await logEvent({
+        userId: user.id,
+        eventType: "preference_changed",
+        eventData: {
+          preference_key: change.key,
+          old_value: change.old_value,
+          new_value: change.new_value,
+          preference_type: "snooze",
+        },
+        source: "app",
+        useServiceClient: true,
+      });
+    }
 
     return NextResponse.json({
       success: true,

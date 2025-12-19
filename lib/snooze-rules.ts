@@ -17,6 +17,7 @@ export interface UserSnoozePreferences {
     pick_a_time?: boolean;
   };
   follow_up_cadence: "fast" | "balanced" | "light_touch";
+  smart_suggestions_enabled: boolean;
 }
 
 /**
@@ -277,6 +278,7 @@ export async function getUserSnoozePreferences(
         pick_a_time: true,
       },
       follow_up_cadence: "balanced",
+      smart_suggestions_enabled: true,
     })
     .select()
     .single();
@@ -299,6 +301,7 @@ export async function getUserSnoozePreferences(
         pick_a_time: true,
       },
       follow_up_cadence: "balanced",
+      smart_suggestions_enabled: true,
     }
   );
 }

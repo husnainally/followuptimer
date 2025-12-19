@@ -348,6 +348,11 @@ export async function getRecommendedSnooze(
     // Get user preferences
     const prefs = await getUserSnoozePreferences(userId);
 
+    // Check if smart suggestions are enabled
+    if (!prefs.smart_suggestions_enabled) {
+      return null; // Return null to indicate basic snooze should be used
+    }
+
     // Generate candidates
     const candidates = await getSnoozeCandidates(
       userId,

@@ -50,9 +50,13 @@ export function PopupSystem() {
         // let the browser paint, then settle to visible for smooth transitions
         requestAnimationFrame(() => setUiState("visible"));
 
-        // Fetch snooze suggestions if reminder_id exists
+        // Fetch snooze suggestions if reminder_id exists and smart suggestions enabled
         if (data.popup.reminder_id) {
-          fetchSnoozeSuggestions(data.popup.reminder_id, data.popup.payload);
+          // Check if smart suggestions are enabled before fetching
+          fetchSnoozeSuggestions(data.popup.reminder_id, data.popup.payload).catch(() => {
+            // If fetch fails (e.g., smart suggestions disabled), use empty candidates
+            setSnoozeCandidates([]);
+          });
         } else {
           setSnoozeCandidates([]);
         }
@@ -76,11 +80,36 @@ export function PopupSystem() {
       }
 
       const response = await fetch(url.toString());
-      if (!response.ok) return;
+      if (!response.ok) {
+        // If 404 or smart suggestions disabled, return empty
+        setSnoozeCandidates([]);
+        return;
+      }
 
       const data = await response.json();
-      if (data.candidates && Array.isArray(data.candidates)) {
+      if (data.candidates && Array.isArray(data.candidates) && data.candidates.length > 0) {
         setSnoozeCandidates(data.candidates);
+        
+        // Log suggestion_shown event
+        try {
+          await fetch("/api/events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              event_type: "suggestion_shown",
+              event_data: {
+                reminder_id: reminderId,
+                candidates_count: data.candidates.length,
+                recommended_type: data.candidates.find((c: { recommended?: boolean }) => c.recommended)?.type,
+                context_type: eventType || "unknown",
+              },
+            }),
+          });
+        } catch (e) {
+          // Fail silently - analytics is non-critical
+        }
+      } else {
+        setSnoozeCandidates([]);
       }
     } catch (error) {
       // Silently fail - suggestions are non-critical
@@ -218,6 +247,26 @@ export function PopupSystem() {
                   (c) => c.scheduledTime === scheduledTime || 
                   (scheduledTime && new Date(c.scheduledTime).getTime() === new Date(scheduledTime).getTime())
                 );
+                
+                // Log suggestion_clicked event if candidate found
+                if (candidate) {
+                  fetch("/api/events", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      event_type: "suggestion_clicked",
+                      event_data: {
+                        reminder_id: currentPopup.reminder_id,
+                        suggestion_type: candidate.type,
+                        scheduled_time: candidate.scheduledTime,
+                        was_recommended: candidate.recommended || false,
+                      },
+                    }),
+                  }).catch(() => {
+                    // Fail silently - analytics is non-critical
+                  });
+                }
+                
                 handleAction(
                   currentPopup.id,
                   "SNOOZE",

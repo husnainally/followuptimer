@@ -6,6 +6,10 @@ import { generateAffirmation } from "@/lib/affirmations";
 import { sendPushNotification } from "@/lib/push-notification";
 import { createInAppNotification } from "@/lib/in-app-notification";
 import { logError, logInfo } from "@/lib/logger";
+import {
+  checkReminderSuppression,
+  logReminderSuppression,
+} from "@/lib/reminder-suppression";
 
 async function handler(request: Request) {
   try {
@@ -45,11 +49,69 @@ async function handler(request: Request) {
       );
     }
 
+    // Check if reminder should be suppressed
+    const profile = reminder.profiles;
+    const timezone = profile?.timezone || "UTC";
+    const scheduledTime = new Date(reminder.remind_at);
+    
+    const suppressionCheck = await checkReminderSuppression(
+      reminder.user_id,
+      reminderId,
+      scheduledTime,
+      timezone
+    );
+
+    // If suppressed, log and reschedule
+    if (suppressionCheck.suppressed && suppressionCheck.reason) {
+      await logReminderSuppression(
+        reminder.user_id,
+        reminderId,
+        suppressionCheck.reason,
+        scheduledTime,
+        suppressionCheck.nextAttemptTime
+      );
+
+      // Reschedule reminder to next valid time
+      if (suppressionCheck.nextAttemptTime) {
+        const { rescheduleReminder } = await import("@/lib/qstash");
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+        
+        if (appUrl && reminder.qstash_message_id) {
+          try {
+            const newQstashMessageId = await rescheduleReminder(
+              reminder.qstash_message_id,
+              {
+                reminderId: reminder.id,
+                remindAt: suppressionCheck.nextAttemptTime,
+                callbackUrl: `${appUrl}/api/reminders/send`,
+              }
+            );
+            
+            await supabase
+              .from("reminders")
+              .update({
+                remind_at: suppressionCheck.nextAttemptTime.toISOString(),
+                qstash_message_id: newQstashMessageId,
+                status: "snoozed",
+              })
+              .eq("id", reminderId);
+          } catch (error) {
+            console.error("Failed to reschedule suppressed reminder:", error);
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: false,
+        suppressed: true,
+        reason: suppressionCheck.reason,
+        message: suppressionCheck.message,
+        next_attempt_time: suppressionCheck.nextAttemptTime?.toISOString(),
+      });
+    }
+
     // Generate affirmation
     const affirmation = generateAffirmation(reminder.tone);
-
-    // Get user's notification preferences
-    const profile = reminder.profiles;
     const emailEnabled = profile?.email_notifications ?? false;
     const pushEnabled = profile?.push_notifications ?? false;
     const inAppEnabled = profile?.in_app_notifications ?? false;
