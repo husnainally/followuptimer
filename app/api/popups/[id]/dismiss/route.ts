@@ -62,6 +62,22 @@ export async function POST(
       useServiceClient: true,
     });
 
+    // If popup had snooze options available, log snooze_cancelled
+    if (updatedPopup.reminder_id && updatedPopup.status === "dismissed") {
+      await logEvent({
+        userId: user.id,
+        eventType: "snooze_cancelled",
+        eventData: {
+          popup_id: id,
+          reminder_id: updatedPopup.reminder_id,
+          action: "dismissed",
+        },
+        source: "app",
+        reminderId: updatedPopup.reminder_id,
+        useServiceClient: true,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       popup: updatedPopup,

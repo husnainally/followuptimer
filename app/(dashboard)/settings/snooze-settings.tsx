@@ -44,6 +44,7 @@ const snoozeSettingsSchema = z.object({
   followUpCadence: z
     .enum(["fast", "balanced", "light_touch"])
     .default("balanced"),
+  smartSuggestionsEnabled: z.boolean().default(true),
 });
 
 type SnoozeSettingsFormData = z.infer<typeof snoozeSettingsSchema>;
@@ -79,6 +80,7 @@ export function SnoozeSettings() {
       nextWeek: true,
       pickATime: true,
       followUpCadence: "balanced",
+      smartSuggestionsEnabled: true,
     },
   });
 
@@ -118,6 +120,7 @@ export function SnoozeSettings() {
               nextWeek: prefs.default_snooze_options?.next_week ?? true,
               pickATime: prefs.default_snooze_options?.pick_a_time ?? true,
               followUpCadence: prefs.follow_up_cadence || "balanced",
+              smartSuggestionsEnabled: prefs.smart_suggestions_enabled ?? true,
             });
           }
         } else {
@@ -159,6 +162,7 @@ export function SnoozeSettings() {
             pick_a_time: data.pickATime,
           },
           follow_up_cadence: data.followUpCadence,
+          smart_suggestions_enabled: data.smartSuggestionsEnabled,
         }),
       });
 
@@ -513,6 +517,44 @@ export function SnoozeSettings() {
                   )}
                 />
               </div>
+            </div>
+
+            {/* Smart Suggestions */}
+            <div className="space-y-4 border-b pb-6">
+              <Label className="text-base font-semibold">
+                Smart Suggestions
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Enable intelligent snooze suggestions based on your behavior and preferences
+              </p>
+
+              <FormField
+                control={form.control}
+                name="smartSuggestionsEnabled"
+                render={({ field }) => (
+                  <div className="flex items-center space-x-2">
+                    <ControlledSwitch
+                      control={form.control}
+                      name="smartSuggestionsEnabled"
+                    />
+                    <div className="flex-1">
+                      <Label
+                        htmlFor="smartSuggestionsEnabled"
+                        className="cursor-pointer"
+                      >
+                        {field.value
+                          ? "Smart suggestions enabled"
+                          : "Use basic snooze options only"}
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {field.value
+                          ? "Get personalized snooze suggestions based on your patterns"
+                          : "Use simple duration-based snooze (10m, 1h, etc.)"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              />
             </div>
 
             {/* Follow-up Cadence */}

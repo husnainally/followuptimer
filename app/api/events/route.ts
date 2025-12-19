@@ -60,6 +60,11 @@ export async function POST(request: Request) {
       "snooze_suggested",
       "snooze_selected",
       "reminder_deferred_by_rule",
+      "reminder_suppressed",
+      "preference_changed",
+      "snooze_cancelled",
+      "suggestion_shown",
+      "suggestion_clicked",
     ];
 
     if (!validEventTypes.includes(event_type as EventType)) {

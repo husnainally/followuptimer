@@ -30,7 +30,12 @@ export type EventType =
   | "affirmation_action_clicked"
   | "snooze_suggested"
   | "snooze_selected"
-  | "reminder_deferred_by_rule";
+  | "reminder_deferred_by_rule"
+  | "reminder_suppressed"
+  | "preference_changed"
+  | "snooze_cancelled"
+  | "suggestion_shown"
+  | "suggestion_clicked";
 
 export type EventSource =
   | "app"
