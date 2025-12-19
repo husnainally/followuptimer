@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       "reminder_missed",
       "reminder_due",
       "reminder_scheduled",
+      "task_completed",
       "popup_shown",
       "popup_action",
       "popup_dismissed",

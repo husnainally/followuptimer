@@ -151,21 +151,30 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'popup_shown' | 'popup_action' | 'inactivity_detected' | 'streak_achieved' | 'follow_up_required';
+          event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'reminder_missed' | 'reminder_due' | 'reminder_scheduled' | 'task_completed' | 'popup_shown' | 'popup_action' | 'popup_dismissed' | 'popup_action_clicked' | 'popup_snoozed' | 'popup_expired' | 'inactivity_detected' | 'streak_achieved' | 'streak_incremented' | 'streak_broken' | 'follow_up_required' | 'email_opened' | 'no_reply_after_n_days' | 'linkedin_profile_viewed' | 'linkedin_message_sent';
+          source: string;
+          contact_id: string | null;
+          reminder_id: string | null;
           event_data: Json;
           created_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
-          event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'popup_shown' | 'popup_action' | 'inactivity_detected' | 'streak_achieved' | 'follow_up_required';
+          event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'reminder_missed' | 'reminder_due' | 'reminder_scheduled' | 'task_completed' | 'popup_shown' | 'popup_action' | 'popup_dismissed' | 'popup_action_clicked' | 'popup_snoozed' | 'popup_expired' | 'inactivity_detected' | 'streak_achieved' | 'streak_incremented' | 'streak_broken' | 'follow_up_required' | 'email_opened' | 'no_reply_after_n_days' | 'linkedin_profile_viewed' | 'linkedin_message_sent';
+          source?: string;
+          contact_id?: string | null;
+          reminder_id?: string | null;
           event_data?: Json;
           created_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
-          event_type?: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'popup_shown' | 'popup_action' | 'inactivity_detected' | 'streak_achieved' | 'follow_up_required';
+          event_type?: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'reminder_missed' | 'reminder_due' | 'reminder_scheduled' | 'task_completed' | 'popup_shown' | 'popup_action' | 'popup_dismissed' | 'popup_action_clicked' | 'popup_snoozed' | 'popup_expired' | 'inactivity_detected' | 'streak_achieved' | 'streak_incremented' | 'streak_broken' | 'follow_up_required' | 'email_opened' | 'no_reply_after_n_days' | 'linkedin_profile_viewed' | 'linkedin_message_sent';
+          source?: string;
+          contact_id?: string | null;
+          reminder_id?: string | null;
           event_data?: Json;
           created_at?: string;
         };
@@ -175,7 +184,7 @@ export interface Database {
           id: string;
           user_id: string;
           rule_name: string;
-          trigger_event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'popup_shown' | 'popup_action' | 'inactivity_detected' | 'streak_achieved' | 'follow_up_required';
+          trigger_event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'reminder_missed' | 'reminder_due' | 'reminder_scheduled' | 'task_completed' | 'popup_shown' | 'popup_action' | 'popup_dismissed' | 'popup_action_clicked' | 'popup_snoozed' | 'popup_expired' | 'inactivity_detected' | 'streak_achieved' | 'streak_incremented' | 'streak_broken' | 'follow_up_required' | 'email_opened' | 'no_reply_after_n_days' | 'linkedin_profile_viewed' | 'linkedin_message_sent';
           conditions: Json;
           action_type: string;
           action_config: Json;
@@ -187,7 +196,7 @@ export interface Database {
           id?: string;
           user_id: string;
           rule_name: string;
-          trigger_event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'popup_shown' | 'popup_action' | 'inactivity_detected' | 'streak_achieved' | 'follow_up_required';
+          trigger_event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'reminder_missed' | 'reminder_due' | 'reminder_scheduled' | 'task_completed' | 'popup_shown' | 'popup_action' | 'popup_dismissed' | 'popup_action_clicked' | 'popup_snoozed' | 'popup_expired' | 'inactivity_detected' | 'streak_achieved' | 'streak_incremented' | 'streak_broken' | 'follow_up_required' | 'email_opened' | 'no_reply_after_n_days' | 'linkedin_profile_viewed' | 'linkedin_message_sent';
           conditions?: Json;
           action_type: string;
           action_config?: Json;
@@ -199,13 +208,45 @@ export interface Database {
           id?: string;
           user_id?: string;
           rule_name?: string;
-          trigger_event_type?: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'popup_shown' | 'popup_action' | 'inactivity_detected' | 'streak_achieved' | 'follow_up_required';
+          trigger_event_type?: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'reminder_missed' | 'reminder_due' | 'reminder_scheduled' | 'task_completed' | 'popup_shown' | 'popup_action' | 'popup_dismissed' | 'popup_action_clicked' | 'popup_snoozed' | 'popup_expired' | 'inactivity_detected' | 'streak_achieved' | 'streak_incremented' | 'streak_broken' | 'follow_up_required' | 'email_opened' | 'no_reply_after_n_days' | 'linkedin_profile_viewed' | 'linkedin_message_sent';
           conditions?: Json;
           action_type?: string;
           action_config?: Json;
           enabled?: boolean;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      behaviour_triggers: {
+        Row: {
+          id: string;
+          user_id: string;
+          trigger_type: string;
+          event_id: string | null;
+          status: string;
+          metadata: Json;
+          created_at: string;
+          consumed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          trigger_type: string;
+          event_id?: string | null;
+          status?: string;
+          metadata?: Json;
+          created_at?: string;
+          consumed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          trigger_type?: string;
+          event_id?: string | null;
+          status?: string;
+          metadata?: Json;
+          created_at?: string;
+          consumed_at?: string | null;
         };
       };
       popups: {
@@ -350,7 +391,7 @@ export interface Database {
       tone_type: 'motivational' | 'professional' | 'playful' | 'simple';
       reminder_status: 'pending' | 'sent' | 'snoozed' | 'dismissed';
       notification_method: 'email' | 'push' | 'in_app';
-      event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'popup_shown' | 'popup_action' | 'inactivity_detected' | 'streak_achieved' | 'follow_up_required';
+      event_type: 'reminder_created' | 'reminder_completed' | 'reminder_snoozed' | 'reminder_dismissed' | 'reminder_missed' | 'reminder_due' | 'reminder_scheduled' | 'task_completed' | 'popup_shown' | 'popup_action' | 'popup_dismissed' | 'popup_action_clicked' | 'popup_snoozed' | 'popup_expired' | 'inactivity_detected' | 'streak_achieved' | 'streak_incremented' | 'streak_broken' | 'follow_up_required' | 'email_opened' | 'no_reply_after_n_days' | 'linkedin_profile_viewed' | 'linkedin_message_sent';
       popup_template_type: 'success' | 'streak' | 'inactivity' | 'follow_up_required';
       popup_status: 'pending' | 'shown' | 'dismissed' | 'action_taken';
       snooze_reason: 'user_action' | 'smart_suggestion' | 'auto';
