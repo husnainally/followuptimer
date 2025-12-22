@@ -37,7 +37,8 @@ export type EventType =
   | "preference_changed"
   | "snooze_cancelled"
   | "suggestion_shown"
-  | "suggestion_clicked";
+  | "suggestion_clicked"
+  | "trial_expired";
 
 export type EventSource =
   | "app"
