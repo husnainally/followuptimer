@@ -98,6 +98,27 @@ export async function POST(request: Request) {
       );
     }
 
+    // Milestone 9: Gate digest_detail_level based on plan
+    if (digest_detail_level === "standard") {
+      const { getUserPlan, isFeatureEnabled } = await import("@/lib/entitlements");
+      const plan = await getUserPlan(user.id);
+      
+      if (plan) {
+        const hasDigestAccess = isFeatureEnabled(plan, "weekly_digest");
+        
+        // FREE users can only use "light" detail level
+        if (!hasDigestAccess) {
+          return NextResponse.json(
+            {
+              error:
+                "Standard detail level is available on PRO. Upgrade to unlock detailed digests.",
+            },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     // Get existing preferences to track changes
     const { data: existingPrefs } = await supabase
       .from("user_digest_preferences")

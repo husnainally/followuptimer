@@ -107,7 +107,31 @@ export async function POST(request: Request) {
     // Build update object with only provided fields
     const updateData: Partial<UserPreferences> = {};
 
-    if (tone_style !== undefined) updateData.tone_style = tone_style;
+    // Milestone 9: Gate tone_style based on plan
+    if (tone_style !== undefined) {
+      // Check if user has PRO access for advanced tones
+      const { getUserPlan, isFeatureEnabled } = await import("@/lib/entitlements");
+      const plan = await getUserPlan(user.id);
+      
+      if (plan) {
+        const hasToneAccess = isFeatureEnabled(plan, "tone_variants");
+        
+        // FREE users can only use "neutral" tone
+        // Check if trying to use a PRO-only tone
+        const proOnlyTones = ["supportive", "direct", "motivational", "minimal"];
+        if (proOnlyTones.includes(tone_style) && !hasToneAccess) {
+          return NextResponse.json(
+            {
+              error:
+                "Advanced tone variants are available on PRO. Upgrade to unlock all tones.",
+            },
+            { status: 403 }
+          );
+        }
+      }
+      
+      updateData.tone_style = tone_style;
+    }
     if (notification_channels !== undefined)
       updateData.notification_channels = notification_channels;
     if (notification_intensity !== undefined)

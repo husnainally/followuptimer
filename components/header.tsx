@@ -12,7 +12,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import { usePlan } from '@/hooks/use-plan';
+import { isInTrial } from '@/lib/plans';
+import { Crown, Clock } from 'lucide-react';
 
 interface UserProfile {
   full_name: string | null;
@@ -23,6 +28,7 @@ export function DashboardHeader() {
   const pathname = usePathname();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const { plan, loading: planLoading } = usePlan();
 
   useEffect(() => {
     async function fetchProfile() {
@@ -147,9 +153,37 @@ export function DashboardHeader() {
                   <p className='text-xs text-muted-foreground'>
                     {profile.email || ''}
                   </p>
-                  
-                  
+                  {!planLoading && plan && (
+                    <div className='mt-2 flex items-center gap-2'>
+                      <Badge
+                        variant={
+                          plan.plan_type === 'FREE'
+                            ? 'secondary'
+                            : 'default'
+                        }
+                        className='text-xs'
+                      >
+                        {plan.plan_type === 'PRO' || plan.plan_type === 'TEAM' ? (
+                          <Crown className='w-3 h-3 mr-1' />
+                        ) : null}
+                        {plan.plan_type}
+                      </Badge>
+                      {isInTrial(plan) && plan.trial_ends_at && (
+                        <Badge variant='outline' className='text-xs'>
+                          <Clock className='w-3 h-3 mr-1' />
+                          Trial
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href='/settings?section=plan'>
+                    <Crown className='w-4 h-4 mr-2' />
+                    View Plan
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href='/settings'>Go to Settings</Link>
                 </DropdownMenuItem>
