@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -16,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Form } from "@/components/ui/form";
 import { reminderSchema, type ReminderFormData } from "@/lib/schemas";
-import { Calendar as CalendarIcon, Trash2, AlertCircle } from "lucide-react";
+import { Calendar as CalendarIcon, Trash2, AlertCircle, User, StickyNote } from "lucide-react";
 import { ControlledTextarea } from "@/components/controlled-textarea";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +32,15 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { StatusExplanation } from "@/components/reminder/status-explanation";
 import { AuditTimeline } from "@/components/reminder/audit-timeline";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function ReminderDetailPage() {
   const router = useRouter();
@@ -48,6 +58,11 @@ export default function ReminderDetailPage() {
     snoozed_until?: Date | null;
   } | null>(null);
   const [suppressionDetails, setSuppressionDetails] = useState<any>(null);
+  const [contactId, setContactId] = useState<string | null>(null);
+  const [contactName, setContactName] = useState<string | null>(null);
+  const [addNoteDialogOpen, setAddNoteDialogOpen] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [isAddingNote, setIsAddingNote] = useState(false);
 
   const form = useForm<ReminderFormData>({
     resolver: zodResolver(reminderSchema),
@@ -113,6 +128,25 @@ export default function ReminderDetailPage() {
           ? new Date(reminder.snoozed_until)
           : null,
       });
+
+      // Store contact info if linked
+      if (reminder?.contact_id) {
+        setContactId(reminder.contact_id);
+        // Fetch contact name
+        fetch(`/api/contacts/${reminder.contact_id}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.contact) {
+              setContactName(data.contact.name);
+            }
+          })
+          .catch(() => {
+            // Fail silently
+          });
+      } else {
+        setContactId(null);
+        setContactName(null);
+      }
 
       // Fetch suppression details if status is suppressed
       if (reminder?.status === "suppressed" || reminder?.status === "pending") {
@@ -455,6 +489,31 @@ export default function ReminderDetailPage() {
 
         {/* Sidebar: Info and Delete */}
         <div className="flex flex-col gap-4">
+          {/* Quick Actions Card */}
+          {contactId && (
+            <Card className="bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Link href={`/contacts/${contactId}`}>
+                  <Button variant="outline" className="w-full justify-start gap-2">
+                    <User className="w-4 h-4" />
+                    View Contact: {contactName || "Contact"}
+                  </Button>
+                </Link>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2"
+                  onClick={() => setAddNoteDialogOpen(true)}
+                >
+                  <StickyNote className="w-4 h-4" />
+                  Add Note
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Info Card */}
           <Card className="bg-card">
             <CardContent className="space-y-3 pt-6">
@@ -562,6 +621,77 @@ export default function ReminderDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Add Note Dialog */}
+      <Dialog open={addNoteDialogOpen} onOpenChange={setAddNoteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Note to Contact</DialogTitle>
+            <DialogDescription>
+              Add a note to {contactName || "this contact"}. This will be appended to the contact's notes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="note">Note</Label>
+              <Textarea
+                id="note"
+                placeholder="Enter your note here..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAddNoteDialogOpen(false);
+                setNoteText("");
+              }}
+              disabled={isAddingNote}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!noteText.trim() || !contactId) return;
+
+                setIsAddingNote(true);
+                try {
+                  // Use the notes API endpoint for proper history tracking
+                  const response = await fetch(`/api/contacts/${contactId}/notes`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      note_text: noteText.trim(),
+                      reminder_id: reminderId || null,
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || "Failed to add note");
+                  }
+
+                  toast.success("Note added successfully");
+                  setAddNoteDialogOpen(false);
+                  setNoteText("");
+                } catch (error: any) {
+                  console.error("Failed to add note:", error);
+                  toast.error(error.message || "Failed to add note");
+                } finally {
+                  setIsAddingNote(false);
+                }
+              }}
+              disabled={isAddingNote || !noteText.trim()}
+            >
+              {isAddingNote ? "Adding..." : "Add Note"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

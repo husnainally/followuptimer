@@ -5,12 +5,29 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, FileText, Plus, Calendar, Clock } from "lucide-react";
+import { ArrowLeft, Mail, Phone, FileText, Plus, Calendar, Clock, GitMerge } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RemindersTable } from "@/app/(dashboard)/reminders-table";
 import { format } from "date-fns";
 import { ContactHistory } from "@/components/contact/contact-history";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Contact {
   id: string;
@@ -20,6 +37,7 @@ interface Contact {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
 }
 
 interface Reminder {
@@ -40,6 +58,10 @@ export default function ContactDetailPage() {
   const [contact, setContact] = useState<Contact | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
+  const [selectedContactId, setSelectedContactId] = useState<string>("");
+  const [isMerging, setIsMerging] = useState(false);
 
   useEffect(() => {
     if (contactId) {
@@ -65,6 +87,57 @@ export default function ContactDetailPage() {
       toast.error("Failed to load contact");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchAvailableContacts() {
+    try {
+      const response = await fetch("/api/contacts");
+      if (!response.ok) throw new Error("Failed to fetch contacts");
+      const data = await response.json();
+      // Filter out current contact and archived contacts
+      const available = (data.contacts || []).filter(
+        (c: Contact) => c.id !== contactId && !c.archived_at
+      );
+      setAvailableContacts(available);
+    } catch (error) {
+      console.error("Failed to fetch contacts:", error);
+      toast.error("Failed to load contacts");
+    }
+  }
+
+  async function handleMerge() {
+    if (!selectedContactId) {
+      toast.error("Please select a contact to merge with");
+      return;
+    }
+
+    setIsMerging(true);
+    try {
+      const response = await fetch("/api/contacts/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          primary_contact_id: contactId,
+          secondary_contact_id: selectedContactId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Failed to merge contacts");
+      }
+
+      toast.success("Contacts merged successfully");
+      setMergeDialogOpen(false);
+      setSelectedContactId("");
+      router.push(`/contacts/${contactId}`);
+      router.refresh();
+    } catch (error: any) {
+      console.error("Failed to merge contacts:", error);
+      toast.error(error.message || "Failed to merge contacts");
+    } finally {
+      setIsMerging(false);
     }
   }
 
@@ -114,9 +187,22 @@ export default function ContactDetailPage() {
             </p>
           </div>
         </div>
-        <Link href={`/contacts/${contact.id}/edit`}>
-          <Button variant="outline">Edit Contact</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setMergeDialogOpen(true);
+              fetchAvailableContacts();
+            }}
+            className="gap-2"
+          >
+            <GitMerge className="w-4 h-4" />
+            Merge
+          </Button>
+          <Link href={`/contacts/${contact.id}/edit`}>
+            <Button variant="outline">Edit Contact</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Contact Details */}
@@ -199,6 +285,49 @@ export default function ContactDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Merge Dialog */}
+      <AlertDialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Merge Contacts</AlertDialogTitle>
+            <AlertDialogDescription>
+              Select a contact to merge with <strong>{contact.name}</strong>. All reminders and
+              activity from the selected contact will be moved to this contact, and the selected
+              contact will be archived.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Select value={selectedContactId} onValueChange={setSelectedContactId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a contact to merge with" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableContacts.length === 0 ? (
+                  <SelectItem value="" disabled>
+                    No contacts available to merge
+                  </SelectItem>
+                ) : (
+                  availableContacts.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} {c.email && `(${c.email})`}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isMerging}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMerge}
+              disabled={isMerging || !selectedContactId}
+            >
+              {isMerging ? "Merging..." : "Merge Contacts"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
