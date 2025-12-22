@@ -106,7 +106,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/contacts/[id] - Delete a contact
+// DELETE /api/contacts/[id] - Archive a contact (soft delete)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -122,11 +122,13 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const permanent = searchParams.get("permanent") === "true";
 
     // Check if contact exists and belongs to user
     const { data: contact, error: checkError } = await supabase
       .from("contacts")
-      .select("id")
+      .select("id, archived_at")
       .eq("id", id)
       .eq("user_id", user.id)
       .single();
@@ -135,20 +137,39 @@ export async function DELETE(
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
 
-    // Delete contact (reminders will have contact_id set to null due to on delete set null)
-    const { error } = await supabase
-      .from("contacts")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
+    if (permanent) {
+      // Hard delete (only if already archived)
+      if (!contact.archived_at) {
+        return NextResponse.json(
+          { error: "Contact must be archived before permanent deletion" },
+          { status: 400 }
+        );
+      }
 
-    if (error) throw error;
+      const { error } = await supabase
+        .from("contacts")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+    } else {
+      // Soft delete (archive)
+      const { error } = await supabase
+        .from("contacts")
+        .update({ archived_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .is("archived_at", null); // Only archive if not already archived
+
+      if (error) throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    console.error("Failed to delete contact:", error);
+    console.error("Failed to archive contact:", error);
     const message =
-      error instanceof Error ? error.message : "Failed to delete contact";
+      error instanceof Error ? error.message : "Failed to archive contact";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

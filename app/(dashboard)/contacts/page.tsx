@@ -27,14 +27,17 @@ interface Contact {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
 }
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [archivedContacts, setArchivedContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     fetchContacts();
@@ -42,15 +45,39 @@ export default function ContactsPage() {
 
   async function fetchContacts() {
     try {
-      const response = await fetch("/api/contacts");
-      if (!response.ok) throw new Error("Failed to fetch contacts");
-      const data = await response.json();
-      setContacts(data.contacts || []);
+      // Fetch active contacts
+      const activeResponse = await fetch("/api/contacts");
+      if (!activeResponse.ok) throw new Error("Failed to fetch contacts");
+      const activeData = await activeResponse.json();
+      setContacts(activeData.contacts || []);
+
+      // Fetch archived contacts
+      const archivedResponse = await fetch("/api/contacts?archived_only=true");
+      if (archivedResponse.ok) {
+        const archivedData = await archivedResponse.json();
+        setArchivedContacts(archivedData.contacts || []);
+      }
     } catch (error) {
       console.error("Failed to fetch contacts:", error);
       toast.error("Failed to load contacts");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRestore(contactId: string) {
+    try {
+      const response = await fetch(`/api/contacts/${contactId}/restore`, {
+        method: "POST",
+      });
+
+      if (!response.ok) throw new Error("Failed to restore contact");
+
+      toast.success("Contact restored successfully");
+      fetchContacts();
+    } catch (error) {
+      console.error("Failed to restore contact:", error);
+      toast.error("Failed to restore contact");
     }
   }
 
@@ -70,7 +97,7 @@ export default function ContactsPage() {
 
       if (!response.ok) throw new Error("Failed to delete contact");
 
-      toast.success("Contact deleted successfully");
+      toast.success("Contact archived successfully");
       setDeleteDialogOpen(false);
       setContactToDelete(null);
       fetchContacts();
@@ -196,13 +223,73 @@ export default function ContactsPage() {
         </div>
       )}
 
+      {/* Archived Contacts Section */}
+      {archivedContacts.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Archived Contacts</h2>
+              <p className="text-sm text-muted-foreground">
+                {archivedContacts.length} archived contact
+                {archivedContacts.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              {showArchived ? "Hide" : "Show"} Archived
+            </Button>
+          </div>
+
+          {showArchived && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {archivedContacts.map((contact) => (
+                <Card
+                  key={contact.id}
+                  className="hover:shadow-md transition-shadow opacity-75"
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg">{contact.name}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Archived
+                        </p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="mt-4 pt-4 border-t flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => handleRestore(contact.id)}
+                      >
+                        Restore
+                      </Button>
+                      <Link href={`/contacts/${contact.id}`}>
+                        <Button variant="ghost" className="flex-1">
+                          View
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+            <AlertDialogTitle>Archive Contact</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {contactToDelete?.name}? This will unlink all reminders
-              associated with this contact, but the reminders themselves will not be deleted.
+              Are you sure you want to archive {contactToDelete?.name}? This will hide the contact
+              from your main list, but you can restore it later. All linked reminders will remain
+              linked to this contact.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -212,7 +299,7 @@ export default function ContactsPage() {
               disabled={isDeleting}
               className="bg-destructive hover:bg-destructive/90"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? "Archiving..." : "Archive"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

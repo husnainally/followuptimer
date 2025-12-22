@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 // GET /api/contacts - Get all contacts for the user
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient();
     const {
@@ -13,11 +13,26 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: contacts, error } = await supabase
+    const { searchParams } = new URL(request.url);
+    const includeArchived = searchParams.get("include_archived") === "true";
+    const archivedOnly = searchParams.get("archived_only") === "true";
+
+    let query = supabase
       .from("contacts")
       .select("*")
-      .eq("user_id", user.id)
-      .order("name", { ascending: true });
+      .eq("user_id", user.id);
+
+    // Filter by archive status
+    if (archivedOnly) {
+      query = query.not("archived_at", "is", null);
+    } else if (!includeArchived) {
+      // Default: exclude archived contacts
+      query = query.is("archived_at", null);
+    }
+
+    const { data: contacts, error } = await query.order("name", {
+      ascending: true,
+    });
 
     if (error) {
       console.error("Failed to fetch contacts:", error);
