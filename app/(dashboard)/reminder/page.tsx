@@ -69,6 +69,15 @@ export default function RemindersPage() {
     }
   }, [statusTab, statusTabs])
 
+  // Check for tab query parameter on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab");
+    if (tabParam && ["all", "overdue", "today", "upcoming", "completed"].includes(tabParam)) {
+      setCategoryTab(tabParam as typeof categoryTab);
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController()
 

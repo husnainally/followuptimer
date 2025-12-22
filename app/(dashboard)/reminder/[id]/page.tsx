@@ -29,6 +29,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { StatusExplanation } from "@/components/reminder/status-explanation";
+import { AuditTimeline } from "@/components/reminder/audit-timeline";
 
 export default function ReminderDetailPage() {
   const router = useRouter();
@@ -43,7 +45,9 @@ export default function ReminderDetailPage() {
     created_at?: Date;
     updated_at?: Date;
     status?: string;
+    snoozed_until?: Date | null;
   } | null>(null);
+  const [suppressionDetails, setSuppressionDetails] = useState<any>(null);
 
   const form = useForm<ReminderFormData>({
     resolver: zodResolver(reminderSchema),
@@ -105,7 +109,24 @@ export default function ReminderDetailPage() {
           ? new Date(reminder.updated_at)
           : undefined,
         status: reminder?.status,
+        snoozed_until: reminder?.snoozed_until
+          ? new Date(reminder.snoozed_until)
+          : null,
       });
+
+      // Fetch suppression details if status is suppressed
+      if (reminder?.status === "suppressed" || reminder?.status === "pending") {
+        try {
+          const auditResponse = await fetch(`/api/reminders/${reminderId}/audit`);
+          if (auditResponse.ok) {
+            const auditData = await auditResponse.json();
+            setSuppressionDetails(auditData.suppressionDetails);
+          }
+        } catch (err) {
+          // Fail silently - suppression details are optional
+          console.error("Failed to fetch suppression details:", err);
+        }
+      }
     } catch (error: any) {
       const message = error?.message || "Failed to load reminder";
       setLoadError(message);
@@ -464,13 +485,32 @@ export default function ReminderDetailPage() {
                 </p>
                 <Badge
                   variant="outline"
-                  className="mt-2 capitalize border-border/60"
+                  className={cn(
+                    "mt-2 capitalize border-border/60",
+                    statusDisplay === "completed" && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                    statusDisplay === "suppressed" && "bg-amber-50 text-amber-700 border-amber-200",
+                    statusDisplay === "snoozed" && "bg-blue-50 text-blue-700 border-blue-200",
+                    statusDisplay === "pending" && "bg-primary/10 text-primary border-primary/20"
+                  )}
                 >
                   {statusDisplay}
                 </Badge>
               </div>
             </CardContent>
           </Card>
+
+          {/* Status Explanation */}
+          {meta?.status && (
+            <StatusExplanation
+              status={meta.status}
+              remindAt={form.watch("remind_at")}
+              suppressionDetails={suppressionDetails}
+              snoozedUntil={meta.snoozed_until}
+            />
+          )}
+
+          {/* Audit Timeline */}
+          <AuditTimeline reminderId={reminderId} />
 
           {/* Delete Card */}
           <Card className="bg-destructive/5 border-destructive/20">
