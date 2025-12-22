@@ -1,12 +1,267 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
-  getUsersForWeeklyDigest,
-  generateWeeklyStats,
-  wasDigestSent,
-  markDigestAsSent,
-} from "@/lib/weekly-digest";
-import { sendWeeklyDigestEmail } from "@/lib/weekly-digest-email";
+  getUsersDueForDigest,
+  wasDigestSentThisWeek,
+  isUserEligibleForDigest,
+  getUserWeekBoundaries,
+  generateDedupeKey,
+} from "@/lib/digest-scheduler";
+import { computeDigestStats } from "@/lib/digest-stats";
+import { selectDigestVariant } from "@/lib/digest-variant-selector";
+import { renderDigestTemplate } from "@/lib/digest-templates";
+import { Resend } from "resend";
+import { createInAppNotification } from "@/lib/in-app-notification";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+const MAX_RETRIES = 3;
+const RETRY_BACKOFF_MS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s
+
+/**
+ * Send digest email
+ */
+async function sendDigestEmail(
+  to: string,
+  subject: string,
+  html: string,
+  text: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY not configured");
+    }
+
+    const from = process.env.RESEND_FROM || "onboarding@resend.dev";
+
+    const result = await resend.emails.send({
+      from,
+      to,
+      subject,
+      html,
+      text,
+    });
+
+    if (result.error) {
+      throw new Error(result.error.message || "Failed to send email");
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to send digest email:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Mark digest as sent in database
+ */
+async function markDigestAsSent(
+  userId: string,
+  weekStart: Date,
+  weekEnd: Date,
+  variant: string,
+  dedupeKey: string,
+  stats: unknown
+): Promise<void> {
+  const supabase = createServiceClient();
+
+  await supabase.from("weekly_digests").upsert({
+    user_id: userId,
+    week_start_date: weekStart.toISOString().split("T")[0],
+    week_end_date: weekEnd.toISOString().split("T")[0],
+    digest_variant: variant,
+    dedupe_key: dedupeKey,
+    stats_data: stats,
+    sent_at: new Date().toISOString(),
+    status: "sent",
+    retry_count: 0,
+  });
+}
+
+/**
+ * Mark digest as failed
+ */
+async function markDigestAsFailed(
+  userId: string,
+  weekStart: Date,
+  weekEnd: Date,
+  variant: string,
+  dedupeKey: string,
+  failureReason: string,
+  retryCount: number
+): Promise<void> {
+  const supabase = createServiceClient();
+
+  await supabase.from("weekly_digests").upsert({
+    user_id: userId,
+    week_start_date: weekStart.toISOString().split("T")[0],
+    week_end_date: weekEnd.toISOString().split("T")[0],
+    digest_variant: variant,
+    dedupe_key: dedupeKey,
+    status: "failed",
+    failure_reason: failureReason,
+    retry_count: retryCount,
+    last_retry_at: new Date().toISOString(),
+  });
+}
+
+/**
+ * Process digest for a single user with retry logic
+ */
+async function processUserDigest(userInfo: {
+  user_id: string;
+  email: string;
+  timezone: string;
+  preferences: {
+    digest_day: number;
+    digest_time: string;
+    digest_channel: "email" | "in_app" | "both";
+    digest_detail_level: "light" | "standard";
+    only_when_active: boolean;
+  };
+}): Promise<{ success: boolean; error?: string }> {
+  const { user_id, email, timezone, preferences } = userInfo;
+
+  // Check eligibility (new users)
+  if (!(await isUserEligibleForDigest(user_id))) {
+    return { success: true }; // Not an error, just skip
+  }
+
+  // Calculate week boundaries in user's timezone
+  const now = new Date();
+  const { weekStart, weekEnd } = getUserWeekBoundaries(now, timezone);
+
+  // Check idempotency
+  const dedupeKey = generateDedupeKey(user_id, weekStart);
+  if (await wasDigestSentThisWeek(user_id, weekStart)) {
+    console.log(`Digest already sent for user ${user_id} (dedupe_key: ${dedupeKey})`);
+    return { success: true };
+  }
+
+  // Check if user wants digest only when active
+  if (preferences.only_when_active) {
+    const supabase = createServiceClient();
+    const { count } = await supabase
+      .from("events")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user_id)
+      .gte("created_at", weekStart.toISOString())
+      .lte("created_at", weekEnd.toISOString());
+
+    if (!count || count === 0) {
+      return { success: true }; // Skip, not an error
+    }
+  }
+
+  // Compute stats
+  const stats = await computeDigestStats(user_id, weekStart, weekEnd, timezone);
+  if (!stats) {
+    const error = "Failed to compute digest stats";
+    console.error(`[${user_id}] ${error}`);
+    return { success: false, error };
+  }
+
+  // Select variant
+  const variantResult = selectDigestVariant(stats, preferences.digest_detail_level);
+  const variant = variantResult.variant;
+
+  // Render templates
+  const templates = renderDigestTemplate(stats, variant);
+
+  // Retry logic for sending
+  let lastError: string | undefined;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // Send via configured channels
+      const sendPromises: Promise<{ success: boolean; error?: string }>[] = [];
+
+      if (preferences.digest_channel === "email" || preferences.digest_channel === "both") {
+        sendPromises.push(
+          sendDigestEmail(email, templates.email.subject, templates.email.html, templates.email.text)
+        );
+      }
+
+      if (preferences.digest_channel === "in_app" || preferences.digest_channel === "both") {
+        sendPromises.push(
+          createInAppNotification({
+            userId: user_id,
+            title: templates.inApp.title,
+            message: templates.inApp.content,
+            type: "weekly_digest",
+            data: templates.inApp.data,
+            useServiceClient: true,
+          }).then((result) => ({
+            success: result.success,
+            error: result.success ? undefined : result.error,
+          })).catch((error) => ({
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          }))
+        );
+      }
+
+      const results = await Promise.allSettled(sendPromises);
+      const allSucceeded = results.every(
+        (r) => r.status === "fulfilled" && r.value.success
+      );
+
+      if (allSucceeded) {
+        // Mark as sent
+        await markDigestAsSent(
+          user_id,
+          weekStart,
+          weekEnd,
+          variant,
+          dedupeKey,
+          stats
+        );
+        return { success: true };
+      } else {
+        // At least one failed
+        const errors = results
+          .filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.success))
+          .map((r) =>
+            r.status === "rejected"
+              ? String(r.reason)
+              : r.value.error || "Unknown error"
+          );
+        lastError = errors.join("; ");
+
+        if (attempt < MAX_RETRIES) {
+          // Wait before retry (exponential backoff)
+          await new Promise((resolve) =>
+            setTimeout(resolve, RETRY_BACKOFF_MS[attempt] || 4000)
+          );
+          continue;
+        }
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Unknown error";
+      if (attempt < MAX_RETRIES) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, RETRY_BACKOFF_MS[attempt] || 4000)
+        );
+        continue;
+      }
+    }
+  }
+
+  // All retries failed
+  await markDigestAsFailed(
+    user_id,
+    weekStart,
+    weekEnd,
+    variant,
+    dedupeKey,
+    lastError || "All retry attempts failed",
+    MAX_RETRIES
+  );
+
+  return { success: false, error: lastError };
+}
 
 // POST /api/digests/generate - Generate and send weekly digests (called by cron)
 export async function POST(request: Request) {
@@ -19,58 +274,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const users = await getUsersForWeeklyDigest();
+    // Get users due for digest (timezone-aware)
+    const users = await getUsersDueForDigest();
 
     if (users.length === 0) {
       return NextResponse.json({
-        message: "No users to send digests to",
+        message: "No users due for digest at this time",
         sent: 0,
+        errors: 0,
       });
     }
 
-    // Calculate week range (last 7 days)
-    const weekEnd = new Date();
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - 7);
-
     let sentCount = 0;
     let errorCount = 0;
+    let skippedCount = 0;
 
+    // Process each user
     for (const user of users) {
       try {
-        // Check if already sent
-        if (await wasDigestSent(user.id, weekStart)) {
-          console.log(`Digest already sent for user ${user.id}`);
-          continue;
-        }
-
-        // Generate stats
-        const stats = await generateWeeklyStats(user.id, weekStart, weekEnd);
-
-        if (!stats) {
-          console.error(`Failed to generate stats for user ${user.id}`);
-          errorCount++;
-          continue;
-        }
-
-        // Send email
-        const result = await sendWeeklyDigestEmail(user.email, stats);
+        const result = await processUserDigest(user);
 
         if (result.success) {
-          // Mark as sent
-          await markDigestAsSent(user.id, weekStart, weekEnd, stats);
           sentCount++;
-          console.log(`Digest sent to ${user.email}`);
+          console.log(`[${user.user_id}] Digest sent successfully`);
         } else {
-          console.error(
-            `Failed to send digest to ${user.email}:`,
-            result.error
-          );
           errorCount++;
+          console.error(`[${user.user_id}] Failed to send digest:`, result.error);
         }
       } catch (error) {
-        console.error(`Error processing digest for user ${user.id}:`, error);
         errorCount++;
+        console.error(`[${user.user_id}] Error processing digest:`, error);
       }
     }
 
@@ -79,6 +312,7 @@ export async function POST(request: Request) {
       total: users.length,
       sent: sentCount,
       errors: errorCount,
+      skipped: skippedCount,
     });
   } catch (error: unknown) {
     console.error("Failed to generate digests:", error);

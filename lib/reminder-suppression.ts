@@ -11,16 +11,18 @@ import {
   type UserSnoozePreferences,
 } from "@/lib/snooze-rules";
 
+// Suppression reason codes matching Milestone 6 spec
 export type ReminderSuppressionReason =
-  | "quiet_hours"
-  | "cooldown_active"
-  | "daily_cap"
-  | "working_hours"
-  | "weekend"
-  | "category_disabled"
-  | "notif_permission_denied"
-  | "dnd_active"
-  | "other";
+  | "QUIET_HOURS" // Maps from quiet_hours
+  | "WORKDAY_DISABLED" // Maps from working_hours
+  | "DAILY_CAP" // Maps from daily_cap
+  | "COOLDOWN_ACTIVE" // Maps from cooldown_active
+  | "CATEGORY_DISABLED" // Maps from category_disabled
+  | "NOTIFICATION_PERMISSION_DENIED" // Maps from notif_permission_denied
+  | "weekend" // Legacy, kept for backward compatibility
+  | "dnd_active" // Legacy, kept for backward compatibility
+  | "other"; // Legacy, kept for backward compatibility
+
 
 export interface SuppressionCheckResult {
   suppressed: boolean;
@@ -45,7 +47,7 @@ export async function checkReminderSuppression(
     if (isWithinQuietHours(scheduledTime, prefs, timezone)) {
       return {
         suppressed: true,
-        reason: "quiet_hours",
+        reason: "QUIET_HOURS",
         nextAttemptTime: getNextValidTime(scheduledTime, prefs, timezone),
         message: "Reminder suppressed due to quiet hours",
       };
@@ -55,7 +57,7 @@ export async function checkReminderSuppression(
     if (!isWithinWorkingHours(scheduledTime, prefs, timezone)) {
       return {
         suppressed: true,
-        reason: "working_hours",
+        reason: "WORKDAY_DISABLED",
         nextAttemptTime: getNextValidTime(scheduledTime, prefs, timezone),
         message: "Reminder suppressed - outside working hours",
       };
@@ -65,7 +67,7 @@ export async function checkReminderSuppression(
     if (!prefs.allow_weekends && isWeekend(scheduledTime, timezone)) {
       return {
         suppressed: true,
-        reason: "weekend",
+        reason: "WORKDAY_DISABLED", // Weekend is a form of workday disabled
         nextAttemptTime: getNextValidTime(scheduledTime, prefs, timezone),
         message: "Reminder suppressed - weekends not allowed",
       };
@@ -76,7 +78,7 @@ export async function checkReminderSuppression(
     if (todayCount >= prefs.max_reminders_per_day) {
       return {
         suppressed: true,
-        reason: "daily_cap",
+        reason: "DAILY_CAP",
         nextAttemptTime: getNextValidTime(scheduledTime, prefs, timezone),
         message: `Reminder suppressed - daily cap reached (${prefs.max_reminders_per_day})`,
       };
@@ -126,7 +128,8 @@ function getNextValidTime(
 }
 
 /**
- * Log reminder suppression event
+ * Log reminder suppression event with Trust-Lite metadata
+ * Stores: reason_code, intended_fire_time, evaluated_at
  */
 export async function logReminderSuppression(
   userId: string,
@@ -137,13 +140,15 @@ export async function logReminderSuppression(
   additionalData?: Record<string, unknown>
 ): Promise<void> {
   try {
+    const evaluatedAt = new Date();
     await logEvent({
       userId,
       eventType: "reminder_suppressed",
       eventData: {
         reminder_id: reminderId,
-        reason,
-        scheduled_time: scheduledTime.toISOString(),
+        reason_code: reason, // Spec-compliant reason code
+        intended_fire_time: scheduledTime.toISOString(), // When reminder was supposed to fire
+        evaluated_at: evaluatedAt.toISOString(), // When suppression check was performed
         next_attempt_time: nextAttemptTime?.toISOString(),
         ...additionalData,
       },

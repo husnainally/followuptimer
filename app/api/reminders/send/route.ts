@@ -397,9 +397,25 @@ async function handler(request: Request) {
       .update({ status: overallSuccess ? "sent" : "failed" })
       .eq("id", reminderId);
 
+    // Log reminder_triggered event when reminder actually fires (before checking success)
+    const { logEvent } = await import("@/lib/events");
+    await logEvent({
+      userId: reminder.user_id,
+      eventType: "reminder_triggered",
+      eventData: {
+        reminder_id: reminderId,
+        intended_fire_time: scheduledTime.toISOString(),
+        actual_fire_time: new Date().toISOString(),
+        notification_method: reminder.notification_method,
+      },
+      source: "scheduler",
+      reminderId: reminderId,
+      contactId: reminder.contact_id || undefined,
+      useServiceClient: true,
+    });
+
     // Log reminder_completed event when reminder is successfully sent
     if (overallSuccess) {
-      const { logEvent } = await import("@/lib/events");
       // Fetch contact name if contact_id exists
       let contactName: string | undefined;
       if (reminder.contact_id) {
