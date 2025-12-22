@@ -13,7 +13,7 @@ import { UserPlan } from "@/lib/plans";
 const stripe =
   process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
     ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: "2024-12-18.acacia",
+        apiVersion: "2025-12-15.clover",
       })
     : null;
 
@@ -125,7 +125,11 @@ async function updateUserPlanFromSubscription(
     };
 
     // Only update plan_started_at if subscription just became active
-    if (subscriptionStatus === "active" && subscription.current_period_start) {
+    const currentPeriodStart =
+      subscriptionStatus === "active"
+        ? (subscription as any).current_period_start
+        : null;
+    if (currentPeriodStart) {
       const { data: currentProfile } = await supabase
         .from("profiles")
         .select("plan_started_at")
@@ -135,7 +139,7 @@ async function updateUserPlanFromSubscription(
       // Only set if not already set or if plan just started
       if (!currentProfile?.plan_started_at) {
         updateData.plan_started_at = new Date(
-          subscription.current_period_start * 1000
+          currentPeriodStart * 1000
         ).toISOString();
       }
     }
@@ -204,10 +208,7 @@ export async function POST(request: Request) {
     // Verify webhook signature
     const isValid = await verifyWebhookSignature(body, signature);
     if (!isValid) {
-      return NextResponse.json(
-        { error: "Invalid signature" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     // Parse event
@@ -328,4 +329,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

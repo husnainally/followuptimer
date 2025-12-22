@@ -5,6 +5,7 @@
 
 import {
   UserPlan,
+  PlanType,
   SubscriptionStatus,
   hasProAccess,
   isSubscriptionDegraded,
