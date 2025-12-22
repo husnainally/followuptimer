@@ -1,109 +1,123 @@
-"use client"
+"use client";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ProfileSettings } from "./profile-settings"
-import { NotificationSettings } from "./notification-settings"
-import { PrivacySettings } from "./privacy-settings"
-import { AccountSettings } from "./account-settings"
-import { AffirmationSettings } from "./affirmation-settings"
-import { SnoozeSettings } from "./snooze-settings"
-import { DigestSettings } from "./digest-settings"
-import { ToneSettings } from "./tone-settings"
-import { BehaviourSettings } from "./behaviour-settings"
-import { ResetSettings } from "./reset-settings"
-import { User, Bell, Lock, Trash2, Sparkles, Clock, Mail, Palette, Settings2, RotateCcw } from "lucide-react"
+import { useState } from "react";
+import { ProfileSettings } from "./profile-settings";
+import { NotificationSettings } from "./notification-settings";
+import { PrivacySettings } from "./privacy-settings";
+import { AccountSettings } from "./account-settings";
+import { AffirmationSettings } from "./affirmation-settings";
+import { SnoozeSettings } from "./snooze-settings";
+import { DigestSettings } from "./digest-settings";
+import { ToneSettings } from "./tone-settings";
+import { BehaviourSettings } from "./behaviour-settings";
+import { ResetSettings } from "./reset-settings";
+import {
+  User,
+  Bell,
+  Lock,
+  Trash2,
+  Sparkles,
+  Clock,
+  Mail,
+  Palette,
+  Settings2,
+  RotateCcw,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
+type SettingsSection =
+  | "profile"
+  | "tone"
+  | "notifications"
+  | "behaviour"
+  | "affirmations"
+  | "snooze"
+  | "digest"
+  | "privacy"
+  | "reset"
+  | "account";
+
+const settingsMenuItems: Array<{
+  id: SettingsSection;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { id: "profile", label: "Profile", icon: User },
+  { id: "tone", label: "Tone", icon: Palette },
+  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "behaviour", label: "Behaviour", icon: Settings2 },
+  { id: "affirmations", label: "Affirmations", icon: Sparkles },
+  { id: "snooze", label: "Snooze", icon: Clock },
+  { id: "digest", label: "Digest", icon: Mail },
+  { id: "privacy", label: "Privacy", icon: Lock },
+  { id: "reset", label: "Reset", icon: RotateCcw },
+  { id: "account", label: "Account", icon: Trash2 },
+];
 
 export default function SettingsPage() {
+  const [activeSection, setActiveSection] =
+    useState<SettingsSection>("profile");
+
+  const renderContent = () => {
+    switch (activeSection) {
+      case "profile":
+        return <ProfileSettings />;
+      case "tone":
+        return <ToneSettings />;
+      case "notifications":
+        return <NotificationSettings />;
+      case "behaviour":
+        return <BehaviourSettings />;
+      case "affirmations":
+        return <AffirmationSettings />;
+      case "snooze":
+        return <SnoozeSettings />;
+      case "digest":
+        return <DigestSettings />;
+      case "privacy":
+        return <PrivacySettings />;
+      case "reset":
+        return <ResetSettings />;
+      case "account":
+        return <AccountSettings />;
+      default:
+        return <ProfileSettings />;
+    }
+  };
+
   return (
-    <div className="space-y-8 max-w-4xl">
-      {/* Header */}
-      
-      {/* Tabs Navigation */}
-      <Tabs defaultValue="profile" className="w-full ">
-        <TabsList className="grid w-full grid-cols-10 border bg-white">
-          <TabsTrigger value="profile" className="flex gap-2">
-            <User className="w-4 h-4" />
-            <span className="hidden sm:inline">Profile</span>
-          </TabsTrigger>
-          <TabsTrigger value="tone" className="flex gap-2">
-            <Palette className="w-4 h-4" />
-            <span className="hidden sm:inline">Tone</span>
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex gap-2">
-            <Bell className="w-4 h-4" />
-            <span className="hidden sm:inline">Notifications</span>
-          </TabsTrigger>
-          <TabsTrigger value="behaviour" className="flex gap-2">
-            <Settings2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Behaviour</span>
-          </TabsTrigger>
-          <TabsTrigger value="affirmations" className="flex gap-2">
-            <Sparkles className="w-4 h-4" />
-            <span className="hidden sm:inline">Affirmations</span>
-          </TabsTrigger>
-          <TabsTrigger value="snooze" className="flex gap-2">
-            <Clock className="w-4 h-4" />
-            <span className="hidden sm:inline">Snooze</span>
-          </TabsTrigger>
-          <TabsTrigger value="digest" className="flex gap-2">
-            <Mail className="w-4 h-4" />
-            <span className="hidden sm:inline">Digest</span>
-          </TabsTrigger>
-          <TabsTrigger value="privacy" className="flex gap-2">
-            <Lock className="w-4 h-4" />
-            <span className="hidden sm:inline">Privacy</span>
-          </TabsTrigger>
-          <TabsTrigger value="reset" className="flex gap-2">
-            <RotateCcw className="w-4 h-4" />
-            <span className="hidden sm:inline">Reset</span>
-          </TabsTrigger>
-          <TabsTrigger value="account" className="flex gap-2">
-            <Trash2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Account</span>
-          </TabsTrigger>
-        </TabsList>
+    <div className="flex gap-6 min-h-[calc(100vh-8rem)]">
+      {/* Sidebar Navigation */}
+      <aside className="w-64 shrink-0">
+        <nav className="sticky top-4 space-y-1">
+          <div className="space-y-1 border rounded-lg p-2 bg-white">
+            {settingsMenuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveSection(item.id)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      </aside>
 
-        <TabsContent value="profile" className="mt-6">
-          <ProfileSettings />
-        </TabsContent>
-
-        <TabsContent value="tone" className="mt-6">
-          <ToneSettings />
-        </TabsContent>
-
-        <TabsContent value="notifications" className="mt-6">
-          <NotificationSettings />
-        </TabsContent>
-
-        <TabsContent value="behaviour" className="mt-6">
-          <BehaviourSettings />
-        </TabsContent>
-
-        <TabsContent value="affirmations" className="mt-6">
-          <AffirmationSettings />
-        </TabsContent>
-
-        <TabsContent value="snooze" className="mt-6">
-          <SnoozeSettings />
-        </TabsContent>
-
-        <TabsContent value="digest" className="mt-6">
-          <DigestSettings />
-        </TabsContent>
-
-        <TabsContent value="privacy" className="mt-6">
-          <PrivacySettings />
-        </TabsContent>
-
-        <TabsContent value="reset" className="mt-6">
-          <ResetSettings />
-        </TabsContent>
-
-        <TabsContent value="account" className="mt-6">
-          <AccountSettings />
-        </TabsContent>
-      </Tabs>
+      {/* Content Area */}
+      <div className="flex-1 min-w-0">
+        <div className="max-w-4xl">{renderContent()}</div>
+      </div>
     </div>
-  )
+  );
 }
