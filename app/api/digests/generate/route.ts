@@ -12,6 +12,8 @@ import { selectDigestVariant } from "@/lib/digest-variant-selector";
 import { renderDigestTemplate } from "@/lib/digest-templates";
 import { Resend } from "resend";
 import { createInAppNotification } from "@/lib/in-app-notification";
+import { getUserPreferences } from "@/lib/user-preferences";
+import { getToneSubject } from "@/lib/tone-system";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const MAX_RETRIES = 3;
@@ -168,8 +170,18 @@ async function processUserDigest(userInfo: {
   const variantResult = selectDigestVariant(stats, preferences.digest_detail_level);
   const variant = variantResult.variant;
 
+  // Get user tone preference for digest
+  const userPrefs = await getUserPreferences(user_id);
+  const digestTone = userPrefs.digest_tone_inherit
+    ? userPrefs.tone_style
+    : "neutral"; // Default to neutral if not inheriting
+
   // Render templates
   const templates = renderDigestTemplate(stats, variant);
+
+  // Apply tone to subject/title
+  const toneSubject = getToneSubject(templates.email.subject, digestTone);
+  const toneTitle = getToneSubject(templates.inApp.title, digestTone);
 
   // Retry logic for sending
   let lastError: string | undefined;
@@ -180,7 +192,7 @@ async function processUserDigest(userInfo: {
 
       if (preferences.digest_channel === "email" || preferences.digest_channel === "both") {
         sendPromises.push(
-          sendDigestEmail(email, templates.email.subject, templates.email.html, templates.email.text)
+          sendDigestEmail(email, toneSubject, templates.email.html, templates.email.text)
         );
       }
 
@@ -188,7 +200,7 @@ async function processUserDigest(userInfo: {
         sendPromises.push(
           createInAppNotification({
             userId: user_id,
-            title: templates.inApp.title,
+            title: toneTitle,
             message: templates.inApp.content,
             type: "weekly_digest",
             data: templates.inApp.data,

@@ -8,7 +8,10 @@ import { AccountSettings } from "./account-settings"
 import { AffirmationSettings } from "./affirmation-settings"
 import { SnoozeSettings } from "./snooze-settings"
 import { DigestSettings } from "./digest-settings"
-import { User, Bell, Lock, Trash2, Sparkles, Clock, Mail } from "lucide-react"
+import { ToneSettings } from "./tone-settings"
+import { BehaviourSettings } from "./behaviour-settings"
+import { ResetSettings } from "./reset-settings"
+import { User, Bell, Lock, Trash2, Sparkles, Clock, Mail, Palette, Settings2, RotateCcw } from "lucide-react"
 
 
 export default function SettingsPage() {
@@ -18,14 +21,22 @@ export default function SettingsPage() {
       
       {/* Tabs Navigation */}
       <Tabs defaultValue="profile" className="w-full ">
-        <TabsList className="grid w-full grid-cols-7  border bg-white">
+        <TabsList className="grid w-full grid-cols-10 border bg-white">
           <TabsTrigger value="profile" className="flex gap-2">
             <User className="w-4 h-4" />
             <span className="hidden sm:inline">Profile</span>
           </TabsTrigger>
+          <TabsTrigger value="tone" className="flex gap-2">
+            <Palette className="w-4 h-4" />
+            <span className="hidden sm:inline">Tone</span>
+          </TabsTrigger>
           <TabsTrigger value="notifications" className="flex gap-2">
             <Bell className="w-4 h-4" />
             <span className="hidden sm:inline">Notifications</span>
+          </TabsTrigger>
+          <TabsTrigger value="behaviour" className="flex gap-2">
+            <Settings2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Behaviour</span>
           </TabsTrigger>
           <TabsTrigger value="affirmations" className="flex gap-2">
             <Sparkles className="w-4 h-4" />
@@ -43,6 +54,10 @@ export default function SettingsPage() {
             <Lock className="w-4 h-4" />
             <span className="hidden sm:inline">Privacy</span>
           </TabsTrigger>
+          <TabsTrigger value="reset" className="flex gap-2">
+            <RotateCcw className="w-4 h-4" />
+            <span className="hidden sm:inline">Reset</span>
+          </TabsTrigger>
           <TabsTrigger value="account" className="flex gap-2">
             <Trash2 className="w-4 h-4" />
             <span className="hidden sm:inline">Account</span>
@@ -53,8 +68,16 @@ export default function SettingsPage() {
           <ProfileSettings />
         </TabsContent>
 
+        <TabsContent value="tone" className="mt-6">
+          <ToneSettings />
+        </TabsContent>
+
         <TabsContent value="notifications" className="mt-6">
           <NotificationSettings />
+        </TabsContent>
+
+        <TabsContent value="behaviour" className="mt-6">
+          <BehaviourSettings />
         </TabsContent>
 
         <TabsContent value="affirmations" className="mt-6">
@@ -71,6 +94,10 @@ export default function SettingsPage() {
 
         <TabsContent value="privacy" className="mt-6">
           <PrivacySettings />
+        </TabsContent>
+
+        <TabsContent value="reset" className="mt-6">
+          <ResetSettings />
         </TabsContent>
 
         <TabsContent value="account" className="mt-6">

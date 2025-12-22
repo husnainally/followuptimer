@@ -43,6 +43,7 @@ const digestSettingsSchema = z.object({
   digestChannel: z.enum(["email", "in_app", "both"]),
   digestDetailLevel: z.enum(["light", "standard"]),
   onlyWhenActive: z.boolean(),
+  digestToneInherit: z.boolean(),
 });
 
 type DigestSettingsFormData = z.infer<typeof digestSettingsSchema>;
@@ -70,6 +71,7 @@ export function DigestSettings() {
       digestChannel: "email",
       digestDetailLevel: "standard",
       onlyWhenActive: false,
+      digestToneInherit: true,
     },
   });
 
@@ -86,11 +88,17 @@ export function DigestSettings() {
       } = await supabase.auth.getUser();
 
       if (user) {
+        // Load digest preferences
         const { data: preferences } = await supabase
           .from("user_digest_preferences")
           .select("*")
           .eq("user_id", user.id)
           .single();
+
+        // Load user preferences for tone inheritance
+        const prefsResponse = await fetch("/api/preferences");
+        const prefsData = await prefsResponse.json();
+        const userPrefs = prefsData.preferences;
 
         if (preferences) {
           // Convert time from "HH:mm:ss" to "HH:mm"
@@ -105,6 +113,7 @@ export function DigestSettings() {
             digestChannel: preferences.digest_channel ?? "email",
             digestDetailLevel: preferences.digest_detail_level ?? "standard",
             onlyWhenActive: preferences.only_when_active ?? false,
+            digestToneInherit: userPrefs?.digest_tone_inherit ?? true,
           });
         }
       }
@@ -131,7 +140,8 @@ export function DigestSettings() {
       // Convert time from "HH:mm" to "HH:mm:ss"
       const timeWithSeconds = `${data.digestTime}:00`;
 
-      const response = await fetch("/api/digests/preferences", {
+      // Save digest preferences
+      const digestResponse = await fetch("/api/digests/preferences", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -146,9 +156,25 @@ export function DigestSettings() {
         }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to save settings");
+      if (!digestResponse.ok) {
+        const error = await digestResponse.json();
+        throw new Error(error.error || "Failed to save digest settings");
+      }
+
+      // Save tone inheritance preference
+      const prefsResponse = await fetch("/api/preferences", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          digest_tone_inherit: data.digestToneInherit,
+        }),
+      });
+
+      if (!prefsResponse.ok) {
+        const error = await prefsResponse.json();
+        throw new Error(error.error || "Failed to save tone preference");
       }
 
       setSaveSuccess(true);
@@ -354,6 +380,30 @@ export function DigestSettings() {
                     <FormControl>
                       <Switch
                         checked={field.value || false}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="digestToneInherit"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">
+                        Inherit Global Tone
+                      </FormLabel>
+                      <FormDescription>
+                        Use your global tone setting for digest messages. If
+                        disabled, digest will use neutral tone.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value ?? true}
                         onCheckedChange={field.onChange}
                       />
                     </FormControl>

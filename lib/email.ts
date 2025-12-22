@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { getUserTone, getToneSubject } from "./tone-system";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -7,6 +8,7 @@ interface SendReminderEmailOptions {
   subject: string;
   message: string;
   affirmation: string;
+  userId?: string;
 }
 
 export async function sendReminderEmail({
@@ -14,6 +16,7 @@ export async function sendReminderEmail({
   subject,
   message,
   affirmation,
+  userId,
 }: SendReminderEmailOptions) {
   try {
     // Check if Resend API key is configured
@@ -26,17 +29,29 @@ export async function sendReminderEmail({
     // Note: Test domain only works for verified test emails in Resend dashboard
     const from = process.env.RESEND_FROM || "onboarding@resend.dev";
 
+    // Apply tone to subject if userId provided
+    let finalSubject = subject;
+    if (userId) {
+      try {
+        const tone = await getUserTone(userId);
+        finalSubject = getToneSubject(subject, tone);
+      } catch (error) {
+        console.error("[Email] Failed to get user tone:", error);
+        // Continue with original subject
+      }
+    }
+
     console.log("[Email] Sending reminder email:", {
       to,
       from,
-      subject,
+      subject: finalSubject,
       hasApiKey: !!process.env.RESEND_API_KEY,
     });
 
     const result = await resend.emails.send({
       from,
       to,
-      subject,
+      subject: finalSubject,
       text: `${affirmation}\n\nReminder: ${message}`,
       html: `<div style="font-family:system-ui,sans-serif;line-height:1.5">\n  <p style="font-size:16px;margin:0 0 12px">${affirmation}</p>\n  <p style="margin:0 0 8px"><strong>Reminder:</strong> ${escapeHtml(
         message

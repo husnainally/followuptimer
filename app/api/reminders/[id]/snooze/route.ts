@@ -13,6 +13,7 @@ import {
   countRemindersToday,
   getNextWorkingDay,
 } from "@/lib/snooze-rules";
+import { getUserPreferences } from "@/lib/user-preferences";
 
 // Snooze a reminder by adding time to it
 export async function POST(
@@ -65,6 +66,7 @@ export async function POST(
 
     const timezone = profile?.timezone || "UTC";
     const prefs = await getUserSnoozePreferences(user.id);
+    const userPrefs = await getUserPreferences(user.id);
 
     // Calculate new remind_at time
     let newTime: Date;
@@ -76,16 +78,17 @@ export async function POST(
       // Use provided scheduled time
       newTime = new Date(scheduled_time);
       originalTime = new Date(newTime);
-    } else if (minutes) {
+    } else if (minutes !== undefined) {
       // Calculate from minutes
       const currentTime = new Date(reminder.remind_at);
       newTime = new Date(currentTime.getTime() + minutes * 60000);
       originalTime = new Date(newTime);
     } else {
-      return NextResponse.json(
-        { error: "Either minutes or scheduled_time must be provided" },
-        { status: 400 }
-      );
+      // Use default snooze duration from preferences
+      const defaultMinutes = userPrefs.default_snooze_minutes;
+      const currentTime = new Date(reminder.remind_at);
+      newTime = new Date(currentTime.getTime() + defaultMinutes * 60000);
+      originalTime = new Date(newTime);
     }
 
     // Validate and adjust against user preferences

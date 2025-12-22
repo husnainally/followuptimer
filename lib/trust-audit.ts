@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { format } from "date-fns";
+import { getUserTone, getToneMessage } from "./tone-system";
 
 export interface ReminderAuditEvent {
   id: string;
@@ -19,9 +20,27 @@ export interface SuppressionDetail {
 }
 
 /**
- * Get human-readable suppression reason
+ * Get human-readable suppression reason with tone
  */
-export function getSuppressionReasonHuman(reasonCode: string): string {
+export async function getSuppressionReasonHuman(
+  reasonCode: string,
+  userId?: string
+): Promise<string> {
+  // If userId provided, use tone-aware messages
+  if (userId) {
+    try {
+      const tone = await getUserTone(userId);
+      const toneKey = getSuppressionToneKey(reasonCode);
+      if (toneKey) {
+        return getToneMessage(toneKey, tone);
+      }
+    } catch (error) {
+      console.error("Failed to get tone for suppression reason:", error);
+      // Fall through to default messages
+    }
+  }
+
+  // Fallback to default messages
   const reasonMap: Record<string, string> = {
     QUIET_HOURS: "Quiet hours",
     WORKDAY_DISABLED: "Outside working hours",
@@ -40,6 +59,25 @@ export function getSuppressionReasonHuman(reasonCode: string): string {
     other: "Other",
   };
   return reasonMap[reasonCode] || reasonCode;
+}
+
+/**
+ * Map suppression reason code to tone copy key
+ */
+function getSuppressionToneKey(reasonCode: string): string | null {
+  const keyMap: Record<string, string> = {
+    QUIET_HOURS: "suppression.quiet_hours",
+    WORKDAY_DISABLED: "suppression.working_hours",
+    DAILY_CAP: "suppression.daily_cap",
+    COOLDOWN_ACTIVE: "suppression.cooldown",
+    CATEGORY_DISABLED: "suppression.category_disabled",
+    quiet_hours: "suppression.quiet_hours",
+    working_hours: "suppression.working_hours",
+    daily_cap: "suppression.daily_cap",
+    cooldown_active: "suppression.cooldown",
+    category_disabled: "suppression.category_disabled",
+  };
+  return keyMap[reasonCode] || null;
 }
 
 /**
@@ -128,9 +166,12 @@ export async function getReminderSuppressionDetails(
     const nextAttemptTime = eventData.next_attempt_time as string | undefined;
     const evaluatedAt = eventData.evaluated_at as string;
 
+    // Get tone-aware suppression reason
+    const reasonHuman = await getSuppressionReasonHuman(reasonCode, userId);
+
     return {
       reason_code: reasonCode,
-      reason_human: getSuppressionReasonHuman(reasonCode),
+      reason_human: reasonHuman,
       rule_name: getSuppressionRuleName(reasonCode),
       intended_fire_time: intendedFireTime,
       next_attempt_time: nextAttemptTime,
