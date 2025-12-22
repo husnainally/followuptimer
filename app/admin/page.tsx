@@ -246,9 +246,9 @@ export default function AdminDashboardPage() {
               >
                 {stats?.webhooks.success_rate || 100}% success
               </Badge>
-              {stats?.webhooks.failed > 0 && (
+              {(stats?.webhooks.failed || 0) > 0 && (
                 <span className="text-xs text-destructive">
-                  {stats.webhooks.failed} failed
+                  {stats?.webhooks.failed || 0} failed
                 </span>
               )}
             </div>
@@ -272,9 +272,9 @@ export default function AdminDashboardPage() {
               >
                 {stats?.jobs.success_rate || 100}% success
               </Badge>
-              {stats?.jobs.failed > 0 && (
+              {(stats?.jobs.failed || 0) > 0 && (
                 <span className="text-xs text-destructive">
-                  {stats.jobs.failed} failed
+                  {stats?.jobs.failed || 0} failed
                 </span>
               )}
             </div>
