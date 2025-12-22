@@ -36,6 +36,14 @@ const navItems = [
   },
 ];
 
+// Helper to check if pathname matches a nav item
+function isActivePath(pathname: string, href: string): boolean {
+  if (href === "/admin") {
+    return pathname === "/admin";
+  }
+  return pathname.startsWith(href);
+}
+
 export function AdminNav() {
   const pathname = usePathname();
 
@@ -49,7 +57,7 @@ export function AdminNav() {
       <div className="flex flex-col gap-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = isActivePath(pathname, item.href);
 
           return (
             <Link key={item.href} href={item.href}>

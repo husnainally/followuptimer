@@ -4,7 +4,7 @@ import { createClient as createClientBrowser } from "@/lib/supabase/client";
 /**
  * Get the appropriate redirect path based on user's admin status
  * @param userId - The user's ID
- * @returns The redirect path ('/admin/waitlist' for admins, '/dashboard' for regular users)
+ * @returns The redirect path ('/admin' for admins, '/dashboard' for regular users)
  */
 export async function getRedirectPath(userId: string): Promise<string> {
   try {
@@ -19,7 +19,7 @@ export async function getRedirectPath(userId: string): Promise<string> {
       return "/dashboard";
     }
 
-    return profile.is_admin ? "/admin/waitlist" : "/dashboard";
+    return profile.is_admin ? "/admin" : "/dashboard";
   } catch (error) {
     console.error("Error checking admin status:", error);
     return "/dashboard";
@@ -29,7 +29,7 @@ export async function getRedirectPath(userId: string): Promise<string> {
 /**
  * Get the appropriate redirect path based on user's admin status (client-side)
  * @param userId - The user's ID
- * @returns The redirect path ('/admin/waitlist' for admins, '/dashboard' for regular users)
+ * @returns The redirect path ('/admin' for admins, '/dashboard' for regular users)
  */
 export async function getRedirectPathClient(userId: string): Promise<string> {
   try {
@@ -44,7 +44,7 @@ export async function getRedirectPathClient(userId: string): Promise<string> {
       return "/dashboard";
     }
 
-    return profile.is_admin ? "/admin/waitlist" : "/dashboard";
+    return profile.is_admin ? "/admin" : "/dashboard";
   } catch (error) {
     console.error("Error checking admin status:", error);
     return "/dashboard";
