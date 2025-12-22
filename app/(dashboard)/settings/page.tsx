@@ -11,6 +11,7 @@ import { DigestSettings } from "./digest-settings";
 import { ToneSettings } from "./tone-settings";
 import { BehaviourSettings } from "./behaviour-settings";
 import { ResetSettings } from "./reset-settings";
+import { PlanSettings } from "./plan-settings";
 import {
   User,
   Bell,
@@ -22,10 +23,12 @@ import {
   Palette,
   Settings2,
   RotateCcw,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type SettingsSection =
+  | "plan"
   | "profile"
   | "tone"
   | "notifications"
@@ -42,6 +45,7 @@ const settingsMenuItems: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
+  { id: "plan", label: "Plan", icon: Crown },
   { id: "profile", label: "Profile", icon: User },
   { id: "tone", label: "Tone", icon: Palette },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -55,11 +59,12 @@ const settingsMenuItems: Array<{
 ];
 
 export default function SettingsPage() {
-  const [activeSection, setActiveSection] =
-    useState<SettingsSection>("profile");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("plan");
 
   const renderContent = () => {
     switch (activeSection) {
+      case "plan":
+        return <PlanSettings />;
       case "profile":
         return <ProfileSettings />;
       case "tone":
@@ -81,7 +86,7 @@ export default function SettingsPage() {
       case "account":
         return <AccountSettings />;
       default:
-        return <ProfileSettings />;
+        return <PlanSettings />;
     }
   };
 

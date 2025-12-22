@@ -29,10 +29,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Check } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const digestSettingsSchema = z.object({
   weeklyDigestEnabled: z.boolean(),
@@ -61,6 +62,8 @@ const dayOptions = [
 export function DigestSettings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [hasProAccess, setHasProAccess] = useState(false);
 
   const form = useForm<DigestSettingsFormData>({
     resolver: zodResolver(digestSettingsSchema),
@@ -76,9 +79,32 @@ export function DigestSettings() {
   });
 
   useEffect(() => {
-    loadDigestSettings();
+    loadPlanAndSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadPlanAndSettings() {
+    try {
+      // Load plan
+      const planResponse = await fetch("/api/plans");
+      if (planResponse.ok) {
+        const planData = await planResponse.json();
+        setHasProAccess(
+          planData.plan?.plan_type === "PRO" ||
+            planData.plan?.plan_type === "TEAM" ||
+            planData.plan?.subscription_status === "trialing"
+        );
+      }
+      setPlanLoading(false);
+
+      // Load settings
+      await loadDigestSettings();
+    } catch (error) {
+      console.error("Failed to load plan:", error);
+      setPlanLoading(false);
+      await loadDigestSettings();
+    }
+  }
 
   async function loadDigestSettings() {
     try {
@@ -134,6 +160,14 @@ export function DigestSettings() {
 
       if (!user) {
         toast.error("You must be logged in to save settings");
+        return;
+      }
+
+      // Check if user is trying to use PRO-only detail level
+      if (!hasProAccess && data.digestDetailLevel === "standard") {
+        toast.error(
+          "Standard detail level is available on PRO. Upgrade to unlock detailed digests."
+        );
         return;
       }
 
@@ -197,7 +231,7 @@ export function DigestSettings() {
     defaultValue: false,
   });
 
-  if (loading) {
+  if (loading || planLoading) {
     return (
       <Card>
         <CardHeader>
@@ -334,15 +368,32 @@ export function DigestSettings() {
                 )}
               />
 
+              {!hasProAccess && (
+                <Alert>
+                  <Lock className="h-4 w-4" />
+                  <AlertDescription>
+                    Standard detail level is available on PRO. Upgrade to unlock
+                    detailed digests.
+                  </AlertDescription>
+                </Alert>
+              )}
               <FormField
                 control={form.control}
                 name="digestDetailLevel"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Detail Level</FormLabel>
+                    <FormLabel>
+                      Detail Level
+                      {!hasProAccess && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          (Limited to Light on FREE plan)
+                        </span>
+                      )}
+                    </FormLabel>
                     <Select
-                      value={field.value ?? "standard"}
+                      value={field.value ?? (hasProAccess ? "standard" : "light")}
                       onValueChange={field.onChange}
+                      disabled={!hasProAccess && field.value === "standard"}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -351,14 +402,25 @@ export function DigestSettings() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="light">Light (Minimal)</SelectItem>
-                        <SelectItem value="standard">
+                        <SelectItem
+                          value="standard"
+                          disabled={!hasProAccess}
+                        >
                           Standard (Full Details)
+                          {hasProAccess && (
+                            <span className="ml-2 text-xs text-primary">PRO</span>
+                          )}
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     <FormDescription>
                       Light shows only key metrics, Standard includes
-                      per-contact breakdown
+                      per-contact breakdown.
+                      {!hasProAccess && (
+                        <span className="block mt-1">
+                          Upgrade to PRO to unlock standard detail level.
+                        </span>
+                      )}
                     </FormDescription>
                   </FormItem>
                 )}

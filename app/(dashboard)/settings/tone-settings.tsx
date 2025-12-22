@@ -27,9 +27,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Check } from "lucide-react";
+import { Check, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const toneSettingsSchema = z.object({
   toneStyle: z.enum(["neutral", "supportive", "direct", "motivational", "minimal"]),
@@ -68,6 +69,12 @@ const toneDescriptions: Record<string, { label: string; description: string; exa
 export function ToneSettings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [planLoading, setPlanLoading] = useState(true);
+  const [hasProAccess, setHasProAccess] = useState(false);
+  const [entitlement, setEntitlement] = useState<{
+    enabled: boolean;
+    limit: number | null;
+  } | null>(null);
 
   const form = useForm<ToneSettingsFormData>({
     resolver: zodResolver(toneSettingsSchema),
@@ -77,9 +84,36 @@ export function ToneSettings() {
   });
 
   useEffect(() => {
-    loadToneSettings();
+    loadPlanAndSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadPlanAndSettings() {
+    try {
+      // Load plan and entitlements
+      const planResponse = await fetch("/api/plans");
+      if (planResponse.ok) {
+        const planData = await planResponse.json();
+        const toneEntitlement = planData.entitlements?.find(
+          (e: any) => e.feature === "tone_variants"
+        );
+        setEntitlement(toneEntitlement || { enabled: true, limit: null });
+        setHasProAccess(
+          planData.plan?.plan_type === "PRO" ||
+            planData.plan?.plan_type === "TEAM" ||
+            planData.plan?.subscription_status === "trialing"
+        );
+      }
+      setPlanLoading(false);
+
+      // Load current preferences
+      await loadToneSettings();
+    } catch (error) {
+      console.error("Failed to load plan:", error);
+      setPlanLoading(false);
+      await loadToneSettings();
+    }
+  }
 
   async function loadToneSettings() {
     try {
@@ -104,6 +138,14 @@ export function ToneSettings() {
 
   async function saveToneSettings(data: ToneSettingsFormData) {
     try {
+      // Check if user is trying to use a PRO-only tone
+      if (!hasProAccess && data.toneStyle !== "neutral") {
+        toast.error(
+          "Advanced tone variants are available on PRO. Upgrade to unlock all tones."
+        );
+        return;
+      }
+
       const response = await fetch("/api/preferences", {
         method: "POST",
         headers: {
@@ -132,7 +174,12 @@ export function ToneSettings() {
     }
   }
 
-  if (loading) {
+  // Get available tones based on plan
+  const availableTones = hasProAccess
+    ? Object.keys(toneDescriptions)
+    : ["neutral"]; // FREE users only get neutral
+
+  if (loading || planLoading) {
     return (
       <Card>
         <CardHeader>
@@ -150,6 +197,7 @@ export function ToneSettings() {
   }
 
   const selectedTone = form.watch("toneStyle");
+  const isLocked = !hasProAccess;
 
   return (
     <Card>
@@ -165,15 +213,32 @@ export function ToneSettings() {
             onSubmit={form.handleSubmit(saveToneSettings)}
             className="space-y-6"
           >
+            {isLocked && (
+              <Alert>
+                <Lock className="h-4 w-4" />
+                <AlertDescription>
+                  Advanced tone variants are available on PRO. Upgrade to unlock
+                  all tone options.
+                </AlertDescription>
+              </Alert>
+            )}
             <FormField
               control={form.control}
               name="toneStyle"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tone Style</FormLabel>
+                  <FormLabel>
+                    Tone Style
+                    {isLocked && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        (Limited to Neutral on FREE plan)
+                      </span>
+                    )}
+                  </FormLabel>
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}
+                    disabled={isLocked}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -181,18 +246,41 @@ export function ToneSettings() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.entries(toneDescriptions).map(([key, { label, description }]) => (
-                        <SelectItem key={key} value={key}>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{label}</span>
-                            <span className="text-xs text-muted-foreground">{description}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
+                      {availableTones.map((key) => {
+                        const { label, description } = toneDescriptions[key];
+                        const isProOnly = key !== "neutral";
+                        return (
+                          <SelectItem
+                            key={key}
+                            value={key}
+                            disabled={isLocked && isProOnly}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {label}
+                                {isProOnly && !isLocked && (
+                                  <span className="ml-2 text-xs text-primary">
+                                    PRO
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {description}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    This tone will be applied to all notifications, status messages, and UI copy.
+                    This tone will be applied to all notifications, status
+                    messages, and UI copy.
+                    {isLocked && (
+                      <span className="block mt-1">
+                        Upgrade to PRO to unlock all tone variants.
+                      </span>
+                    )}
                   </FormDescription>
                 </FormItem>
               )}

@@ -1,89 +1,64 @@
 /**
- * Feature flag utility for monetisation
- * Checks if user has premium features enabled
+ * Milestone 9: Feature flag utility (updated to use new entitlements system)
+ * This file maintains backward compatibility while using the new plan model
  */
 
-import { createClient } from "@/lib/supabase/server";
-
-export interface UserFeatures {
-  isPremium: boolean;
-  planType: "free" | "pro" | "enterprise";
-  planStatus: "active" | "trial" | "cancelled" | "expired";
-  trialEnd: Date | null;
-  isTrialActive: boolean;
-}
+import { getUserPlan } from "./entitlements";
+import { hasProAccess } from "./plans";
 
 /**
- * Get user's feature flags and plan information
+ * @deprecated Use getUserPlan from entitlements.ts instead
+ * Get user's feature flags and plan information (backward compatibility)
  */
-export async function getUserFeatures(userId: string): Promise<UserFeatures | null> {
-  try {
-    const supabase = await createClient();
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("is_premium, plan_type, plan_status, trial_end")
-      .eq("id", userId)
-      .single();
+export async function getUserFeatures(userId: string) {
+  const plan = await getUserPlan(userId);
+  if (!plan) return null;
 
-    if (error || !profile) {
-      return null;
-    }
+  const isTrialActive =
+    plan.subscription_status === "trialing" &&
+    plan.trial_ends_at !== null &&
+    new Date(plan.trial_ends_at) > new Date();
 
-    const trialEnd = profile.trial_end ? new Date(profile.trial_end) : null;
-    const isTrialActive =
-      profile.plan_status === "trial" &&
-      trialEnd !== null &&
-      trialEnd > new Date();
-
-    return {
-      isPremium: profile.is_premium || false,
-      planType: (profile.plan_type as "free" | "pro" | "enterprise") || "free",
-      planStatus:
-        (profile.plan_status as "active" | "trial" | "cancelled" | "expired") ||
-        "active",
-      trialEnd,
-      isTrialActive,
-    };
-  } catch (error) {
-    console.error("Failed to get user features:", error);
-    return null;
-  }
+  return {
+    isPremium: hasProAccess(plan),
+    planType: plan.plan_type.toLowerCase() as "free" | "pro" | "enterprise",
+    planStatus: plan.subscription_status as
+      | "active"
+      | "trial"
+      | "cancelled"
+      | "expired",
+    trialEnd: plan.trial_ends_at ? new Date(plan.trial_ends_at) : null,
+    isTrialActive,
+  };
 }
 
 /**
  * Check if user has premium access
- * Returns true if user is premium OR has active trial
+ * Returns true if user has PRO access (paid or trial)
  */
 export async function hasPremiumAccess(userId: string): Promise<boolean> {
-  const features = await getUserFeatures(userId);
-  if (!features) return false;
-  return features.isPremium || features.isTrialActive;
+  const plan = await getUserPlan(userId);
+  if (!plan) return false;
+  return hasProAccess(plan);
 }
 
 /**
  * Check if feature is available for user
+ * @deprecated Use isFeatureEnabled from entitlements.ts instead
  */
 export async function isFeatureAvailable(
   userId: string,
   feature: "premium" | "pro" | "enterprise"
 ): Promise<boolean> {
-  const features = await getUserFeatures(userId);
-  if (!features) return false;
+  const plan = await getUserPlan(userId);
+  if (!plan) return false;
 
-  if (feature === "premium") {
-    return features.isPremium || features.isTrialActive;
-  }
-
-  if (feature === "pro") {
-    return (
-      features.planType === "pro" ||
-      features.planType === "enterprise" ||
-      features.isTrialActive
-    );
+  if (feature === "premium" || feature === "pro") {
+    return hasProAccess(plan);
   }
 
   if (feature === "enterprise") {
-    return features.planType === "enterprise";
+    return plan.plan_type === "TEAM";
   }
 
   return false;
