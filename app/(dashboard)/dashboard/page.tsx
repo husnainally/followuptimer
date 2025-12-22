@@ -15,7 +15,7 @@ import {
   Clock,
   Bell,
   ClipboardList,
-  ChevronRight,
+  AlertTriangle,
   type LucideIcon,
 } from 'lucide-react';
 import { RemindersTable } from '../reminders-table';
@@ -24,15 +24,91 @@ import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AffirmationBar } from '@/components/affirmation-bar';
 import { QuickAddReminder } from '@/components/quick-add-reminder';
+import {
+  DashboardCard,
+  TrustIndicators,
+  WeeklyDigestPreview,
+} from '@/components/dashboard/dashboard-cards';
+import { EmptyState } from '@/components/ui/empty-state';
+
+interface DashboardStats {
+  today: { count: number; reminders: any[] };
+  thisWeek: { count: number; reminders: any[] };
+  overdue: { count: number; reminders: any[] };
+  atRisk: { count: number; reminders: any[] };
+  trust: {
+    suppressedThisWeek: number;
+    quietHoursSuppressions: number;
+    failedReminders: number;
+    allProcessedNormally: boolean;
+  };
+  digest: {
+    nextDigestTime: string | null;
+    enabled: boolean;
+  };
+}
 
 export default function DashboardPage() {
   const [reminders, setReminders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [tonePreference, setTonePreference] = useState<string>('motivational');
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  function calculateLocalStats(reminders: any[]) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart);
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay() + 1); // Monday
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const todayReminders = reminders.filter((r) => {
+      const remindAt = new Date(r.remind_at);
+      return remindAt >= todayStart && remindAt <= todayEnd;
+    });
+
+    const weekReminders = reminders.filter((r) => {
+      const remindAt = new Date(r.remind_at);
+      return remindAt >= weekStart && remindAt <= weekEnd;
+    });
+
+    const overdueReminders = reminders.filter((r) => {
+      const remindAt = new Date(r.remind_at);
+      return remindAt < now && r.status === "pending";
+    });
+
+    const atRiskThreshold = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const atRiskReminders = reminders.filter((r) => {
+      const remindAt = new Date(r.remind_at);
+      return remindAt >= now && remindAt <= atRiskThreshold && r.status === "pending";
+    });
+
+    setStats({
+      today: { count: todayReminders.length, reminders: todayReminders },
+      thisWeek: { count: weekReminders.length, reminders: weekReminders },
+      overdue: { count: overdueReminders.length, reminders: overdueReminders },
+      atRisk: { count: atRiskReminders.length, reminders: atRiskReminders },
+      trust: {
+        suppressedThisWeek: 0,
+        quietHoursSuppressions: 0,
+        failedReminders: 0,
+        allProcessedNormally: true,
+      },
+      digest: {
+        nextDigestTime: null,
+        enabled: false,
+      },
+    });
+  }
 
   async function fetchData() {
     try {
@@ -45,7 +121,26 @@ export default function DashboardPage() {
         .order('remind_at', { ascending: true });
 
       if (remindersError) throw remindersError;
-      setReminders(remindersData || []);
+      const remindersList = remindersData || [];
+      setReminders(remindersList);
+
+      // Fetch dashboard stats
+      try {
+        const statsResponse = await fetch('/api/dashboard/stats');
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          setStats(statsData);
+        } else {
+          const errorData = await statsResponse.json().catch(() => ({}));
+          console.error('Failed to fetch dashboard stats:', errorData);
+          // Fallback: calculate stats from local reminders
+          calculateLocalStats(remindersList);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+        // Fallback: calculate stats from local reminders
+        calculateLocalStats(remindersList);
+      }
 
       // Fetch user profile for tone preference
       const {
@@ -142,52 +237,69 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className='flex flex-col gap-6  '>
-      {/* Header Section */}
-
-      {/* Mobile Stats Overview */}
-      <div className='md:hidden'>
-        <div className='rounded-3xl border border-border/70 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-sm'>
-          <div className='flex items-center justify-between mb-4'>
-            <div>
-              <p className='text-xs uppercase tracking-[0.2em] text-muted-foreground'>Snapshot</p>
-              <p className='text-sm text-muted-foreground'>Today&apos;s overview</p>
-            </div>
-            <div className='inline-flex items-center gap-1 rounded-full bg-white/70 px-3 py-1 text-xs text-primary'>
-              <span className='size-2 rounded-full bg-primary' />
-              Live
-            </div>
-          </div>
-          <div className='flex items-center justify-between gap-4'>
-            {statCards.map((card) => (
-              <div key={card.title} className='flex-1 flex flex-col gap-1'>
-                <div className='inline-flex size-9 items-center justify-center rounded-2xl bg-white/70 text-primary shadow-sm mb-1'>
-                  <card.icon className='h-4 w-4' />
-                </div>
-                <p className='text-xs text-muted-foreground'>{card.title}</p>
-                <p className='text-2xl font-semibold text-foreground'>
-                  {typeof card.value === "string"
-                    ? card.value
-                    : card.value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className='flex flex-col gap-6'>
+      {/* Today / This Week Snapshot */}
+      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+        <DashboardCard
+          title="Due Today"
+          count={stats?.today.count ?? 0}
+          description="Follow-ups due today"
+          icon={Clock}
+          href="/reminder"
+          variant="info"
+        />
+        <DashboardCard
+          title="This Week"
+          count={stats?.thisWeek.count ?? 0}
+          description="Scheduled this week"
+          icon={ClipboardList}
+          href="/reminder"
+        />
+        <DashboardCard
+          title="Overdue"
+          count={stats?.overdue.count ?? 0}
+          description="Past due date"
+          icon={AlertTriangle}
+          href="/reminder"
+          variant={stats?.overdue.count ? "warning" : "default"}
+        />
+        <DashboardCard
+          title="At Risk"
+          count={stats?.atRisk.count ?? 0}
+          description="Due in next 24 hours"
+          icon={Bell}
+          href="/reminder"
+          variant={stats?.atRisk.count ? "warning" : "default"}
+        />
       </div>
 
-      {/* Desktop Stats Cards */}
-      <div className='hidden md:grid grid-cols-1 md:grid-cols-3 gap-4'>
-        {statCards.map((card) => (
-          <StatCard
-            key={card.title}
-            title={card.title}
-            description={card.description}
-            value={card.value}
-            icon={card.icon}
-          />
-        ))}
-      </div>
+      {/* Trust Signals & Digest Preview */}
+      {(stats?.trust || stats?.digest) && (
+        <Card className="bg-card">
+          <CardHeader>
+            <CardTitle className="text-base">Trust & Status</CardTitle>
+            <CardDescription>
+              System health and upcoming digest
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {stats.trust && (
+              <TrustIndicators
+                suppressedThisWeek={stats.trust.suppressedThisWeek}
+                quietHoursSuppressions={stats.trust.quietHoursSuppressions}
+                failedReminders={stats.trust.failedReminders}
+                allProcessedNormally={stats.trust.allProcessedNormally}
+              />
+            )}
+            {stats.digest && (
+              <WeeklyDigestPreview
+                nextDigestTime={stats.digest.nextDigestTime}
+                enabled={stats.digest.enabled}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Affirmation Bar */}
       <AffirmationBar />
@@ -212,7 +324,21 @@ export default function DashboardPage() {
           </Link>
         </CardHeader>
         <CardContent>
-          <RemindersTable reminders={reminders} onReminderDeleted={fetchData} />
+          {reminders.length === 0 && !loading ? (
+            <div className="py-12">
+              <EmptyState
+                icon={Bell}
+                title="No reminders yet"
+                description="Create your first follow-up reminder to get started with FollowUp Timer."
+                action={{
+                  label: "Create Reminder",
+                  href: "/reminder/create",
+                }}
+              />
+            </div>
+          ) : (
+            <RemindersTable reminders={reminders} onReminderDeleted={fetchData} />
+          )}
         </CardContent>
       </Card>
     </div>

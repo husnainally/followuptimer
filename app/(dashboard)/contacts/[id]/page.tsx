@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RemindersTable } from "@/app/(dashboard)/reminders-table";
 import { format } from "date-fns";
+import { ContactHistory } from "@/components/contact/contact-history";
 
 interface Contact {
   id: string;
@@ -163,36 +164,41 @@ export default function ContactDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Linked Reminders */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Linked Reminders</CardTitle>
-            <CardDescription>
-              {reminders.length} reminder{reminders.length !== 1 ? "s" : ""} linked to this contact
-            </CardDescription>
-          </div>
-          <Link href={`/reminder/create?contact_id=${contact.id}`}>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              New Reminder
-            </Button>
-          </Link>
-        </CardHeader>
-        <CardContent>
-          {reminders.length === 0 ? (
-            <div className="py-8 text-center">
-              <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground mb-4">No reminders linked to this contact</p>
-              <Link href={`/reminder/create?contact_id=${contact.id}`}>
-                <Button>Create Reminder</Button>
-              </Link>
+      {/* Contact History */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ContactHistory contactId={contactId} />
+
+        {/* Linked Reminders */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Linked Reminders</CardTitle>
+              <CardDescription>
+                {reminders.length} reminder{reminders.length !== 1 ? "s" : ""} linked to this contact
+              </CardDescription>
             </div>
-          ) : (
-            <RemindersTable reminders={reminders} onReminderDeleted={fetchContact} />
-          )}
-        </CardContent>
-      </Card>
+            <Link href={`/reminder/create?contact_id=${contact.id}`}>
+              <Button className="gap-2" size="sm">
+                <Plus className="w-4 h-4" />
+                New Reminder
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {reminders.length === 0 ? (
+              <div className="py-8 text-center">
+                <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-4">No reminders linked to this contact</p>
+                <Link href={`/reminder/create?contact_id=${contact.id}`}>
+                  <Button>Create Reminder</Button>
+                </Link>
+              </div>
+            ) : (
+              <RemindersTable reminders={reminders} onReminderDeleted={fetchContact} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
