@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { getSuppressionReasonHuman, getSuppressionRuleName } from "@/lib/trust-audit";
+import { getSuppressionRuleName } from "@/lib/trust-audit";
 import type { SuppressionDetail } from "@/lib/trust-audit";
 
 interface StatusExplanationProps {
@@ -33,11 +33,11 @@ export function StatusExplanation({
 
       return {
         title: "Reminder was held back",
-        message: `This reminder didn't fire because it fell within your ${getSuppressionReasonHuman(suppressionDetails.reason_code).toLowerCase()}.`,
+        message: `This reminder didn't fire because it fell within your ${suppressionDetails.reason_human.toLowerCase()}.`,
         details: [
           {
             label: "Reason",
-            value: getSuppressionReasonHuman(suppressionDetails.reason_code),
+            value: suppressionDetails.reason_human,
           },
           {
             label: "Rule",

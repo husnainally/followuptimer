@@ -161,14 +161,14 @@ export async function computeWeeklyOverallStats(
   const snooze_rate = triggered > 0 ? Math.round((snoozed / triggered) * 100) : 0;
 
   // Get overdue carry-over (count overdue reminders at start and end of week)
-  const { data: overdueAtStart } = await supabase
+  const { count: overdueAtStart } = await supabase
     .from("reminders")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("status", "pending")
     .lt("remind_at", weekStartISO);
 
-  const { data: overdueAtEnd } = await supabase
+  const { count: overdueAtEnd } = await supabase
     .from("reminders")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
@@ -386,7 +386,9 @@ export async function computeForwardLookingStats(
       (now.getTime() - new Date(longestOverdue.remind_at).getTime()) /
         (1000 * 60 * 60 * 24)
     );
-    const contact = longestOverdue.contacts as { name: string } | null;
+    const contact = Array.isArray(longestOverdue.contacts) 
+      ? (longestOverdue.contacts[0] as { name: string } | undefined) || null
+      : (longestOverdue.contacts as { name: string } | null);
     longestOverdueReminder = {
       reminder_id: longestOverdue.id,
       message: longestOverdue.message,

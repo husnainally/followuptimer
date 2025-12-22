@@ -1,6 +1,8 @@
 import webpush from "web-push";
 import { createServiceClient } from "@/lib/supabase/service";
 
+import { getUserTone, getToneMessage } from "./tone-system";
+
 interface SendPushNotificationOptions {
   userId: string;
   title: string;
@@ -92,9 +94,38 @@ export async function sendPushNotification({
       count: subscriptions.length,
     });
 
+    // Apply tone to title if possible
+    let finalTitle = title;
+    try {
+      const tone = await getUserTone(userId);
+      // Apply tone transformations to title (e.g., emoji changes)
+      if (title.includes("⏰")) {
+        switch (tone) {
+          case "supportive":
+            finalTitle = title.replace("⏰", "✨");
+            break;
+          case "direct":
+            finalTitle = title.replace("⏰", "").trim();
+            break;
+          case "motivational":
+            finalTitle = title.replace("⏰", "🚀");
+            break;
+          case "minimal":
+            finalTitle = title.replace("⏰ Reminder", "Reminder");
+            break;
+          default:
+            // Keep original
+            break;
+        }
+      }
+    } catch (error) {
+      console.error("[Push] Failed to get user tone:", error);
+      // Continue with original title
+    }
+
     // Create notification payload
     const payload = JSON.stringify({
-      title,
+      title: finalTitle,
       body: `${affirmation}\n\n${message}`,
       icon: "/logo1.png",
       badge: "/logo1.png",

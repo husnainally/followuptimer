@@ -10,6 +10,7 @@ import {
   checkReminderSuppression,
   logReminderSuppression,
 } from "@/lib/reminder-suppression";
+import { getUserPreferences } from "@/lib/user-preferences";
 
 async function handler(request: Request) {
   try {
@@ -110,18 +111,50 @@ async function handler(request: Request) {
       });
     }
 
+    // Get user preferences for notification channels and category controls
+    const userPrefs = await getUserPreferences(reminder.user_id);
+    const notificationChannels = userPrefs.notification_channels || ["email"];
+    
+    // Determine reminder category (simplified: check if it's a follow-up by contact_id)
+    const isFollowup = !!reminder.contact_id;
+    const isAffirmation = reminder.message.toLowerCase().includes("affirmation") || 
+                          reminder.message.toLowerCase().includes("motivation");
+    const categoryEnabled = isFollowup 
+      ? userPrefs.category_notifications.followups
+      : isAffirmation
+      ? userPrefs.category_notifications.affirmations
+      : userPrefs.category_notifications.general;
+
+    // Check if category notifications are disabled
+    if (!categoryEnabled) {
+      logInfo("Reminder notification skipped - category disabled", {
+        reminderId: reminder.id,
+        category: isFollowup ? "followups" : isAffirmation ? "affirmations" : "general",
+      });
+      return NextResponse.json({
+        success: false,
+        suppressed: true,
+        reason: "CATEGORY_DISABLED",
+        message: "Notification skipped - category disabled in settings",
+      });
+    }
+
     // Generate affirmation
     const affirmation = generateAffirmation(reminder.tone);
-    const emailEnabled = profile?.email_notifications ?? false;
-    const pushEnabled = profile?.push_notifications ?? false;
-    const inAppEnabled = profile?.in_app_notifications ?? false;
+    
+    // Check notification channels from preferences
+    const emailEnabled = notificationChannels.includes("email") && (profile?.email_notifications ?? true);
+    const pushEnabled = notificationChannels.includes("push") && (profile?.push_notifications ?? false);
+    const inAppEnabled = notificationChannels.includes("in_app") && (profile?.in_app_notifications ?? true);
 
     if (!isProduction) {
       console.log("[Webhook] User preferences:", {
         userId: reminder.user_id,
+        channels: notificationChannels,
         email: emailEnabled,
         push: pushEnabled,
         inApp: inAppEnabled,
+        categoryEnabled,
         userEmail: profile?.email,
       });
     }
@@ -150,6 +183,7 @@ async function handler(request: Request) {
                   subject: "⏰ Reminder from FollowUpTimer",
                   message: reminder.message,
                   affirmation,
+                  userId: reminder.user_id,
                 });
                 notificationResults.push({ method: "email", success: true });
                 overallSuccess = true;

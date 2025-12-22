@@ -9,7 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { ControlledSwitch } from "@/components/controlled-switch";
 import { Check, AlertCircle } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -17,17 +23,32 @@ import { usePushSubscription } from "@/hooks/use-push-subscription";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const notificationSettingsSchema = z.object({
+  // Channel controls
   emailNotifications: z.boolean().default(true),
   pushNotifications: z.boolean().default(true),
+  inAppNotifications: z.boolean().default(true),
+  // Intensity
+  notificationIntensity: z
+    .enum(["standard", "reduced", "essential_only"])
+    .default("standard"),
+  // Category controls
+  categoryFollowups: z.boolean().default(true),
+  categoryAffirmations: z.boolean().default(true),
+  categoryGeneral: z.boolean().default(true),
+  // Legacy fields (keep for backward compatibility)
   reminderAlerts: z.boolean().default(true),
   weeklyDigest: z.boolean().default(false),
-  digestPreferences: z.object({
-    enabled: z.boolean(),
-    day_of_week: z.number().min(0).max(6),
-    time: z.string(),
-    format: z.string(),
-  }).optional(),
-  affirmationFrequency: z.enum(['rare', 'balanced', 'frequent']).default('balanced'),
+  digestPreferences: z
+    .object({
+      enabled: z.boolean(),
+      day_of_week: z.number().min(0).max(6),
+      time: z.string(),
+      format: z.string(),
+    })
+    .optional(),
+  affirmationFrequency: z
+    .enum(["rare", "balanced", "frequent"])
+    .default("balanced"),
   smartSnooze: z.boolean().default(false),
 });
 
@@ -41,6 +62,11 @@ export function NotificationSettings() {
     defaultValues: {
       emailNotifications: true,
       pushNotifications: true,
+      inAppNotifications: true,
+      notificationIntensity: "standard",
+      categoryFollowups: true,
+      categoryAffirmations: true,
+      categoryGeneral: true,
       reminderAlerts: true,
       weeklyDigest: false,
       digestPreferences: {
@@ -49,7 +75,7 @@ export function NotificationSettings() {
         time: "09:00",
         format: "html",
       },
-      affirmationFrequency: 'balanced',
+      affirmationFrequency: "balanced",
       smartSnooze: false,
     },
   });
@@ -67,6 +93,12 @@ export function NotificationSettings() {
       } = await supabase.auth.getUser();
 
       if (user) {
+        // Load from user_preferences (new system)
+        const prefsResponse = await fetch("/api/preferences");
+        const prefsData = await prefsResponse.json();
+        const preferences = prefsData.preferences;
+
+        // Also load legacy profile settings
         const { data: profile } = await supabase
           .from("profiles")
           .select(
@@ -75,23 +107,34 @@ export function NotificationSettings() {
           .eq("id", user.id)
           .single();
 
-        if (profile) {
-          const digestPrefs = (profile.digest_preferences as Record<string, unknown>) || {};
-          form.reset({
-            emailNotifications: profile.email_notifications ?? true,
-            pushNotifications: profile.push_notifications ?? false,
-            reminderAlerts: true,
-            weeklyDigest: digestPrefs.enabled === true,
-            digestPreferences: {
-              enabled: digestPrefs.enabled === true,
-              day_of_week: (digestPrefs.day_of_week as number) ?? 1,
-              time: (digestPrefs.time as string) ?? "09:00",
-              format: (digestPrefs.format as string) ?? "html",
-            },
-            affirmationFrequency: (profile.affirmation_frequency || 'balanced') as 'rare' | 'balanced' | 'frequent',
-            smartSnooze: profile.smart_snooze_enabled ?? false,
-          });
-        }
+        const digestPrefs =
+          (profile?.digest_preferences as Record<string, unknown>) || {};
+
+        // Merge preferences with legacy profile data
+        const channels = preferences?.notification_channels || ["email"];
+        form.reset({
+          emailNotifications: channels.includes("email"),
+          pushNotifications: channels.includes("push"),
+          inAppNotifications: channels.includes("in_app"),
+          notificationIntensity:
+            preferences?.notification_intensity || "standard",
+          categoryFollowups:
+            preferences?.category_notifications?.followups ?? true,
+          categoryAffirmations:
+            preferences?.category_notifications?.affirmations ?? true,
+          categoryGeneral: preferences?.category_notifications?.general ?? true,
+          reminderAlerts: true,
+          weeklyDigest: digestPrefs.enabled === true,
+          digestPreferences: {
+            enabled: digestPrefs.enabled === true,
+            day_of_week: (digestPrefs.day_of_week as number) ?? 1,
+            time: (digestPrefs.time as string) ?? "09:00",
+            format: (digestPrefs.format as string) ?? "html",
+          },
+          affirmationFrequency: (profile?.affirmation_frequency ||
+            "balanced") as "rare" | "balanced" | "frequent",
+          smartSnooze: profile?.smart_snooze_enabled ?? false,
+        });
       }
     } catch (error) {
       console.error("Failed to load notification settings:", error);
@@ -113,7 +156,39 @@ export function NotificationSettings() {
         return;
       }
 
-      // Update notification preferences
+      // Build notification channels array
+      const channels: string[] = [];
+      if (data.emailNotifications) channels.push("email");
+      if (data.pushNotifications) channels.push("push");
+      if (data.inAppNotifications) channels.push("in_app");
+
+      // Validate at least one channel is enabled
+      if (channels.length === 0) {
+        toast.error("At least one notification channel must be enabled");
+        return;
+      }
+
+      // Update user_preferences (new system)
+      const prefsResponse = await fetch("/api/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notification_channels: channels,
+          notification_intensity: data.notificationIntensity,
+          category_notifications: {
+            followups: data.categoryFollowups,
+            affirmations: data.categoryAffirmations,
+            general: data.categoryGeneral,
+          },
+        }),
+      });
+
+      if (!prefsResponse.ok) {
+        const errorData = await prefsResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to update preferences");
+      }
+
+      // Update legacy profile settings
       const digestPrefs = data.weeklyDigest
         ? {
             enabled: true,
@@ -158,7 +233,9 @@ export function NotificationSettings() {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error("Failed to save notification settings:", error);
-      toast.error("Failed to save settings");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save settings"
+      );
     }
   };
 
@@ -167,7 +244,10 @@ export function NotificationSettings() {
       <Card>
         <CardContent className="space-y-4 pt-6">
           {Array.from({ length: 4 }).map((_, idx) => (
-            <div key={idx} className="flex items-center justify-between border border-dashed border-border/40 rounded-xl p-4">
+            <div
+              key={idx}
+              className="flex items-center justify-between border border-dashed border-border/40 rounded-xl p-4"
+            >
               <div className="space-y-2 w-full">
                 <Skeleton className="h-4 w-40" />
                 <Skeleton className="h-3 w-64" />
@@ -188,76 +268,153 @@ export function NotificationSettings() {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <ControlledSwitch
-              control={form.control}
-              name="emailNotifications"
-              label="Email Notifications"
-              description="Receive affirmation reminders via email"
-            />
-            <div className="space-y-2">
+            <div className="space-y-4 border-b pb-4">
+              <Label className="text-base font-semibold">
+                Notification Channels
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Choose how you want to receive notifications. At least one
+                channel must be enabled.
+              </p>
               <ControlledSwitch
                 control={form.control}
-                name="pushNotifications"
-                label="Push Notifications"
-                description="Receive push notifications on your devices"
+                name="emailNotifications"
+                label="Email Notifications"
+                description="Receive reminders via email"
               />
-              {pushSubscription.isSupported && (
-                <div className="ml-6 space-y-2">
-                  {!pushSubscription.isSubscribed &&
-                    pushSubscription.permission !== "denied" && (
+              <div className="space-y-2">
+                <ControlledSwitch
+                  control={form.control}
+                  name="pushNotifications"
+                  label="Push Notifications"
+                  description="Receive push notifications on your devices"
+                />
+                {pushSubscription.isSupported && (
+                  <div className="ml-6 space-y-2">
+                    {!pushSubscription.isSubscribed &&
+                      pushSubscription.permission !== "denied" && (
+                        <div className="space-y-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={pushSubscription.subscribe}
+                            disabled={pushSubscription.isLoading}
+                          >
+                            {pushSubscription.isLoading
+                              ? "Enabling..."
+                              : "Enable Browser Push Notifications"}
+                          </Button>
+                          <p className="text-xs text-muted-foreground">
+                            ⚠️ You must click this button to enable browser push
+                            notifications, even if the toggle above is ON.
+                          </p>
+                        </div>
+                      )}
+                    {pushSubscription.isSubscribed && (
                       <div className="space-y-2">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={pushSubscription.subscribe}
+                          onClick={pushSubscription.unsubscribe}
                           disabled={pushSubscription.isLoading}
                         >
                           {pushSubscription.isLoading
-                            ? "Enabling..."
-                            : "Enable Browser Push Notifications"}
+                            ? "Disabling..."
+                            : "Disable Browser Push Notifications"}
                         </Button>
-                        <p className="text-xs text-muted-foreground">
-                          ⚠️ You must click this button to enable browser push
-                          notifications, even if the toggle above is ON.
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          ✓ Browser push subscription is active
                         </p>
                       </div>
                     )}
-                  {pushSubscription.isSubscribed && (
-                    <div className="space-y-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={pushSubscription.unsubscribe}
-                        disabled={pushSubscription.isLoading}
-                      >
-                        {pushSubscription.isLoading
-                          ? "Disabling..."
-                          : "Disable Browser Push Notifications"}
-                      </Button>
-                      <p className="text-xs text-green-600 dark:text-green-400">
-                        ✓ Browser push subscription is active
-                      </p>
-                    </div>
-                  )}
-                  {pushSubscription.permission === "denied" && (
-                    <div className="flex items-center gap-2 text-sm text-destructive">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>
-                        Push notifications are blocked. Please enable them in
-                        your browser settings.
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-              {!pushSubscription.isSupported && (
-                <p className="ml-6 text-xs text-muted-foreground">
-                  Push notifications are not supported in this browser
-                </p>
-              )}
+                    {pushSubscription.permission === "denied" && (
+                      <div className="flex items-center gap-2 text-sm text-destructive">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>
+                          Push notifications are blocked. Please enable them in
+                          your browser settings.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!pushSubscription.isSupported && (
+                  <p className="ml-6 text-xs text-muted-foreground">
+                    Push notifications are not supported in this browser
+                  </p>
+                )}
+              </div>
+              <ControlledSwitch
+                control={form.control}
+                name="inAppNotifications"
+                label="In-App Notifications"
+                description="Receive notifications within the app"
+              />
             </div>
+            <div className="space-y-4 border-t pt-4">
+              <Label className="text-base font-semibold">
+                Notification Intensity
+              </Label>
+              <Select
+                value={form.watch("notificationIntensity")}
+                onValueChange={(value) =>
+                  form.setValue(
+                    "notificationIntensity",
+                    value as "standard" | "reduced" | "essential_only"
+                  )
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select intensity" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">
+                    Standard - All notifications
+                  </SelectItem>
+                  <SelectItem value="reduced">
+                    Reduced - Fewer notifications
+                  </SelectItem>
+                  <SelectItem value="essential_only">
+                    Essential Only - Critical notifications only
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Controls how many notifications you receive per reminder
+              </p>
+            </div>
+
+            <div className="space-y-4 border-t pt-4">
+              <Label className="text-base font-semibold">
+                Category Controls
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Enable or disable notifications for specific reminder categories
+              </p>
+              <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+                <ControlledSwitch
+                  control={form.control}
+                  name="categoryFollowups"
+                  label="Follow-ups"
+                  description="Notifications for follow-up reminders"
+                />
+                <ControlledSwitch
+                  control={form.control}
+                  name="categoryAffirmations"
+                  label="Affirmations"
+                  description="Notifications for affirmation reminders"
+                />
+                <ControlledSwitch
+                  control={form.control}
+                  name="categoryGeneral"
+                  label="General Reminders"
+                  description="Notifications for general reminders"
+                />
+              </div>
+            </div>
+
             <ControlledSwitch
               control={form.control}
               name="reminderAlerts"
@@ -277,13 +434,12 @@ export function NotificationSettings() {
                   <Select
                     defaultValue="1"
                     onValueChange={(value) => {
-                      const prefs =
-                        form.getValues("digestPreferences") || {
-                          enabled: true,
-                          day_of_week: 1,
-                          time: "09:00",
-                          format: "email",
-                        };
+                      const prefs = form.getValues("digestPreferences") || {
+                        enabled: true,
+                        day_of_week: 1,
+                        time: "09:00",
+                        format: "email",
+                      };
                       form.setValue("digestPreferences", {
                         ...prefs,
                         day_of_week: parseInt(value),
@@ -307,18 +463,29 @@ export function NotificationSettings() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="affirmation-frequency">Affirmation Frequency</Label>
+              <Label htmlFor="affirmation-frequency">
+                Affirmation Frequency
+              </Label>
               <Select
                 value={form.watch("affirmationFrequency")}
-                onValueChange={(value) => form.setValue("affirmationFrequency", value as 'rare' | 'balanced' | 'frequent')}
+                onValueChange={(value) =>
+                  form.setValue(
+                    "affirmationFrequency",
+                    value as "rare" | "balanced" | "frequent"
+                  )
+                }
               >
                 <SelectTrigger id="affirmation-frequency">
                   <SelectValue placeholder="Select frequency" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="rare">Rare - Once per day</SelectItem>
-                  <SelectItem value="balanced">Balanced - Every 4 hours</SelectItem>
-                  <SelectItem value="frequent">Frequent - Every hour</SelectItem>
+                  <SelectItem value="balanced">
+                    Balanced - Every 4 hours
+                  </SelectItem>
+                  <SelectItem value="frequent">
+                    Frequent - Every hour
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">

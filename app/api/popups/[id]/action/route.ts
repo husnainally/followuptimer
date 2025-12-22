@@ -184,6 +184,43 @@ export async function POST(
           eventResult.eventId!,
           { reminder_id: popup.reminder_id }
         );
+
+        // Check if auto-create follow-up is enabled
+        const { getUserPreferences } = await import("@/lib/user-preferences");
+        const userPrefs = await getUserPreferences(user.id);
+        
+        if (userPrefs.auto_create_followup && reminder?.contact_id) {
+          // Create follow-up prompt popup
+          const { getDefaultFollowupDate } = await import("@/lib/followup-creation");
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("timezone")
+            .eq("id", user.id)
+            .single();
+          
+          const timezone = profile?.timezone || "UTC";
+          const followupDate = await getDefaultFollowupDate(
+            user.id,
+            new Date(),
+            timezone
+          );
+
+          const { createPopup } = await import("@/lib/popup-trigger");
+          await createPopup({
+            userId: user.id,
+            templateType: "follow_up_required", // Use existing template type
+            title: "Create Next Follow-up?",
+            message: `Would you like to schedule a follow-up for ${followupDate.toLocaleDateString()}?`,
+            affirmation: "Staying consistent with follow-ups builds stronger relationships.",
+            priority: 6,
+            reminderId: popup.reminder_id,
+            actionData: {
+              suggested_date: followupDate.toISOString(),
+              original_reminder_id: popup.reminder_id,
+              followup_prompt: true,
+            },
+          });
+        }
       }
     } else if (normalizedAction === "SNOOZE" && popup.reminder_id) {
       // Check if reminder is already sent/completed - don't allow snoozing
