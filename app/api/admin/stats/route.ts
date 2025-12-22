@@ -180,19 +180,19 @@ export async function GET(request: Request) {
 
     // Reminder completion rate
     const completionRate =
-      totalReminders && totalReminders > 0
+      totalReminders && totalReminders > 0 && completedReminders
         ? Math.round((completedReminders / totalReminders) * 100)
         : 0;
 
     // Webhook success rate
     const webhookSuccessRate =
-      totalWebhooks && totalWebhooks > 0
+      totalWebhooks && totalWebhooks > 0 && failedWebhooks !== null
         ? Math.round(((totalWebhooks - failedWebhooks) / totalWebhooks) * 100)
         : 100;
 
     // Job success rate
     const jobSuccessRate =
-      totalJobs && totalJobs > 0
+      totalJobs && totalJobs > 0 && failedJobs !== null
         ? Math.round(((totalJobs - failedJobs) / totalJobs) * 100)
         : 100;
 
