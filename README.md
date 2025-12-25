@@ -2,7 +2,7 @@
 
 A smart reminder application with motivational affirmations, built with Next.js, Supabase, Resend, and QStash. 
     
-## ✨ Features
+## ✨ Features      
          
 - 🔐 **Authentication** - Secure email/password auth with Supabase 
 - 📅 **Smart Reminders** - Schedule reminders with custom dates and times
