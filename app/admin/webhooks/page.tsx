@@ -47,8 +47,8 @@ export default function WebhookLogsPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // Filters
-  const [eventType, setEventType] = useState<string>("");
-  const [processed, setProcessed] = useState<string>("");
+  const [eventType, setEventType] = useState<string>("all");
+  const [processed, setProcessed] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [customerId, setCustomerId] = useState<string>("");
 
@@ -64,8 +64,10 @@ export default function WebhookLogsPage() {
         limit: "50",
       });
 
-      if (eventType) params.append("event_type", eventType);
-      if (processed !== "") params.append("processed", processed);
+      if (eventType && eventType !== "all")
+        params.append("event_type", eventType);
+      if (processed && processed !== "all")
+        params.append("processed", processed);
       if (customerId) params.append("customer_id", customerId);
 
       const response = await fetch(`/api/admin/webhooks?${params}`);
@@ -168,7 +170,7 @@ export default function WebhookLogsPage() {
                   <SelectValue placeholder="All events" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All events</SelectItem>
+                  <SelectItem value="all">All events</SelectItem>
                   <SelectItem value="customer.subscription.created">
                     Subscription Created
                   </SelectItem>
@@ -195,7 +197,7 @@ export default function WebhookLogsPage() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All statuses</SelectItem>
+                  <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="true">Processed</SelectItem>
                   <SelectItem value="false">Not Processed</SelectItem>
                 </SelectContent>
@@ -237,7 +239,8 @@ export default function WebhookLogsPage() {
         <CardHeader>
           <CardTitle>Webhook Events</CardTitle>
           <CardDescription>
-            {filteredWebhooks.length} event{filteredWebhooks.length !== 1 ? "s" : ""} shown
+            {filteredWebhooks.length} event
+            {filteredWebhooks.length !== 1 ? "s" : ""} shown
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -273,7 +276,9 @@ export default function WebhookLogsPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="outline">{webhook.event_type}</Badge>
+                            <Badge variant="outline">
+                              {webhook.event_type}
+                            </Badge>
                             <Badge
                               variant={
                                 webhook.processed ? "default" : "destructive"
@@ -367,4 +372,3 @@ export default function WebhookLogsPage() {
     </div>
   );
 }
-
