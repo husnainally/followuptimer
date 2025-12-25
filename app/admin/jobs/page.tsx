@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -35,7 +35,7 @@ interface JobLog {
   retry_count: number;
   last_retry_at: string | null;
   failure_reason: string | null;
-  stats_data: any;
+  stats_data: Record<string, unknown>;
   sent_at: string | null;
   created_at: string;
   dedupe_key: string | null;
@@ -49,15 +49,15 @@ export default function JobLogsPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // Filters
-  const [status, setStatus] = useState<string>("");
-  const [variant, setVariant] = useState<string>("");
+  const [status, setStatus] = useState<string>("all");
+  const [variant, setVariant] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  useEffect(() => {
-    fetchJobs();
-  }, [page, status, variant]);
+  // Ensure status and variant are never empty strings
+  const safeStatus = status || "all";
+  const safeVariant = variant || "all";
 
-  async function fetchJobs() {
+  const fetchJobs = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
@@ -65,8 +65,13 @@ export default function JobLogsPage() {
         limit: "50",
       });
 
-      if (status) params.append("status", status);
-      if (variant) params.append("variant", variant);
+      const currentStatus = status || "all";
+      const currentVariant = variant || "all";
+
+      if (currentStatus && currentStatus !== "all")
+        params.append("status", currentStatus);
+      if (currentVariant && currentVariant !== "all")
+        params.append("variant", currentVariant);
 
       const response = await fetch(`/api/admin/jobs?${params}`);
       const data = await response.json();
@@ -80,7 +85,11 @@ export default function JobLogsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [page, status, variant]);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
   function toggleRow(id: string) {
     const newExpanded = new Set(expandedRows);
@@ -189,12 +198,15 @@ export default function JobLogsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select
+                value={safeStatus}
+                onValueChange={(value) => setStatus(value || "all")}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All statuses</SelectItem>
+                  <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="sent">Sent</SelectItem>
                   <SelectItem value="failed">Failed</SelectItem>
                   <SelectItem value="skipped">Skipped</SelectItem>
@@ -204,12 +216,15 @@ export default function JobLogsPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Variant</label>
-              <Select value={variant} onValueChange={setVariant}>
+              <Select
+                value={safeVariant}
+                onValueChange={(value) => setVariant(value || "all")}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All variants" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All variants</SelectItem>
+                  <SelectItem value="all">All variants</SelectItem>
                   <SelectItem value="standard">Standard</SelectItem>
                   <SelectItem value="light">Light</SelectItem>
                   <SelectItem value="recovery">Recovery</SelectItem>
@@ -239,7 +254,8 @@ export default function JobLogsPage() {
         <CardHeader>
           <CardTitle>Digest Jobs</CardTitle>
           <CardDescription>
-            {filteredJobs.length} job{filteredJobs.length !== 1 ? "s" : ""} shown
+            {filteredJobs.length} job{filteredJobs.length !== 1 ? "s" : ""}{" "}
+            shown
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -276,7 +292,8 @@ export default function JobLogsPage() {
                             {getVariantBadge(job.digest_variant)}
                             {job.retry_count > 0 && (
                               <Badge variant="outline">
-                                {job.retry_count} retry{job.retry_count !== 1 ? "ies" : ""}
+                                {job.retry_count} retry
+                                {job.retry_count !== 1 ? "ies" : ""}
                               </Badge>
                             )}
                           </div>
@@ -295,7 +312,10 @@ export default function JobLogsPage() {
                             <p>
                               <span className="font-medium">Week:</span>{" "}
                               {format(new Date(job.week_start_date), "MMM d")} -{" "}
-                              {format(new Date(job.week_end_date), "MMM d, yyyy")}
+                              {format(
+                                new Date(job.week_end_date),
+                                "MMM d, yyyy"
+                              )}
                             </p>
                             {job.sent_at && (
                               <p>
@@ -369,4 +389,3 @@ export default function JobLogsPage() {
     </div>
   );
 }
-
