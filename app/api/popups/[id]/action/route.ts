@@ -2,6 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 function getString(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
 }
@@ -46,14 +50,15 @@ export async function POST(
       .single();
 
     if (fetchError || !popup) {
-      return NextResponse.json(
-        { error: "Popup not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Popup not found" }, { status: 404 });
     }
 
     // Prevent duplicate actions - check if popup already processed
-    if (popup.status === "acted" || popup.status === "dismissed" || popup.status === "action_taken") {
+    if (
+      popup.status === "acted" ||
+      popup.status === "dismissed" ||
+      popup.status === "action_taken"
+    ) {
       return NextResponse.json(
         { error: "Popup action already processed", popup },
         { status: 409 } // Conflict
@@ -97,14 +102,12 @@ export async function POST(
     }
 
     // Record action
-    const { error: actionError } = await supabase
-      .from("popup_actions")
-      .insert({
-        popup_id: id,
-        user_id: user.id,
-        action_type: normalizedAction,
-        action_data: action_data || {},
-      });
+    const { error: actionError } = await supabase.from("popup_actions").insert({
+      popup_id: id,
+      user_id: user.id,
+      action_type: normalizedAction,
+      action_data: action_data || {},
+    });
 
     if (actionError) throw actionError;
 
@@ -134,7 +137,10 @@ export async function POST(
       });
     }
 
-    if ((normalizedAction === "MARK_DONE" || normalizedAction === "COMPLETE") && popup.reminder_id) {
+    if (
+      (normalizedAction === "MARK_DONE" || normalizedAction === "COMPLETE") &&
+      popup.reminder_id
+    ) {
       // Mark reminder as completed
       await supabase
         .from("reminders")
@@ -173,11 +179,15 @@ export async function POST(
 
       // Update streak tracking (which will create streak_incremented trigger if needed)
       if (eventResult.success && popup.reminder_id) {
-        const { updateStreakOnCompletion } = await import("@/lib/streak-tracking");
+        const { updateStreakOnCompletion } = await import(
+          "@/lib/streak-tracking"
+        );
         await updateStreakOnCompletion(user.id, popup.reminder_id);
-        
+
         // Also process the reminder_completed event for any other triggers
-        const { processEventForTriggers } = await import("@/lib/trigger-manager");
+        const { processEventForTriggers } = await import(
+          "@/lib/trigger-manager"
+        );
         await processEventForTriggers(
           user.id,
           "reminder_completed",
@@ -188,16 +198,18 @@ export async function POST(
         // Check if auto-create follow-up is enabled
         const { getUserPreferences } = await import("@/lib/user-preferences");
         const userPrefs = await getUserPreferences(user.id);
-        
+
         if (userPrefs.auto_create_followup && reminder?.contact_id) {
           // Create follow-up prompt popup
-          const { getDefaultFollowupDate } = await import("@/lib/followup-creation");
+          const { getDefaultFollowupDate } = await import(
+            "@/lib/followup-creation"
+          );
           const { data: profile } = await supabase
             .from("profiles")
             .select("timezone")
             .eq("id", user.id)
             .single();
-          
+
           const timezone = profile?.timezone || "UTC";
           const followupDate = await getDefaultFollowupDate(
             user.id,
@@ -211,7 +223,8 @@ export async function POST(
             templateType: "follow_up_required", // Use existing template type
             title: "Create Next Follow-up?",
             message: `Would you like to schedule a follow-up for ${followupDate.toLocaleDateString()}?`,
-            affirmation: "Staying consistent with follow-ups builds stronger relationships.",
+            affirmation:
+              "Staying consistent with follow-ups builds stronger relationships.",
             priority: 6,
             reminderId: popup.reminder_id,
             actionData: {
@@ -238,10 +251,20 @@ export async function POST(
         );
       }
 
-      const minutes = typeof action_data?.minutes === "number" ? action_data.minutes : 60;
-      const scheduledTime = typeof action_data?.scheduled_time === "string" ? action_data.scheduled_time : undefined;
-      const candidateType = typeof action_data?.candidate_type === "string" ? action_data.candidate_type : undefined;
-      const wasRecommended = typeof action_data?.was_recommended === "boolean" ? action_data.was_recommended : false;
+      const minutes =
+        typeof action_data?.minutes === "number" ? action_data.minutes : 60;
+      const scheduledTime =
+        typeof action_data?.scheduled_time === "string"
+          ? action_data.scheduled_time
+          : undefined;
+      const candidateType =
+        typeof action_data?.candidate_type === "string"
+          ? action_data.candidate_type
+          : undefined;
+      const wasRecommended =
+        typeof action_data?.was_recommended === "boolean"
+          ? action_data.was_recommended
+          : false;
 
       const computedSnoozeUntil =
         scheduledTime ||
@@ -258,7 +281,9 @@ export async function POST(
 
       // Trigger snooze API for reminder scheduling
       await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/reminders/${popup.reminder_id}/snooze`,
+        `${
+          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+        }/api/reminders/${popup.reminder_id}/snooze`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -311,4 +336,3 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-
