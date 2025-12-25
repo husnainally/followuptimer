@@ -2,6 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 // POST /api/popups/[id]/displayed - Mark popup as displayed
 export async function POST(
   request: Request,

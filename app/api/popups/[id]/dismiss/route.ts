@@ -2,6 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 // POST /api/popups/[id]/dismiss - Dismiss popup
 export async function POST(
   request: Request,
@@ -27,10 +31,7 @@ export async function POST(
       .single();
 
     if (fetchError || !popup) {
-      return NextResponse.json(
-        { error: "Popup not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Popup not found" }, { status: 404 });
     }
 
     // Update popup status to dismissed
@@ -89,4 +90,3 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-
