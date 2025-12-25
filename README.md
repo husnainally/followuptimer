@@ -6,7 +6,7 @@ A smart reminder application with motivational affirmations, built with Next.js,
                   
 - 🔐 **Authentication** - Secure email/password auth with Supabase 
 - 📅 **Smart Reminders** - Schedule reminders with custom dates and times
-- 💬 **Affirmations** - Choose from motivational, professional, or playful tones
+- 💬 **Affirmations** - Choose from motivational, professional, or playful tones       
 - 📧 **Email Notifications** - Beautiful emails powered by Resend
 - ⏱️ **QStash Scheduling** - Reliable reminder delivery with Upstash QStash
 - 📊 **Dashboard** - Track all your reminders in one place
