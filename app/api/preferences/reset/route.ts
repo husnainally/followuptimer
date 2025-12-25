@@ -4,6 +4,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getDefaultPreferences, clearPreferencesCache } from "@/lib/user-preferences";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // POST /api/preferences/reset?section=tone|notifications|behaviour|all
 export async function POST(request: Request) {
   try {

@@ -5,6 +5,11 @@ import { generateAffirmation } from "@/lib/affirmations";
 import { sendPushNotification } from "@/lib/push-notification";
 import { createInAppNotification } from "@/lib/in-app-notification";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * Test endpoint to manually trigger reminder sending
  * Useful for testing notifications without waiting for QStash

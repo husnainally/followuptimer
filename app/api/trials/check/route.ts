@@ -9,6 +9,11 @@ import { isEligibleForTrial } from "@/lib/trials";
 import { getUserPlan } from "@/lib/entitlements";
 import { isInTrial } from "@/lib/plans";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * GET /api/trials/check
  * Check trial eligibility and status

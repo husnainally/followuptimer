@@ -4,6 +4,11 @@ import { sendReminderEmail } from "@/lib/email";
 import { sendPushNotification } from "@/lib/push-notification";
 import { generateAffirmation } from "@/lib/affirmations";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * Test endpoint for debugging email and push notifications
  * POST /api/notifications/test

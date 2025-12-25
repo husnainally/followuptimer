@@ -7,6 +7,11 @@
 import { NextResponse } from "next/server";
 import { getExpiredTrials, expireTrial } from "@/lib/trials";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * POST /api/cron/expire-trials
  * Expire all trials that have passed their end date

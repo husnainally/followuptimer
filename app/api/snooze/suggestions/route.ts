@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getRecommendedSnooze } from "@/lib/smart-snooze-engine";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // GET /api/snooze/suggestions - Get smart snooze suggestions
 export async function GET(request: Request) {
   try {

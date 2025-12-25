@@ -7,6 +7,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { startTrial, isEligibleForTrial } from "@/lib/trials";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * POST /api/trials/start
  * Start a trial for the current user

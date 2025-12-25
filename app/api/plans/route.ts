@@ -7,6 +7,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserPlan, getAllEntitlements } from "@/lib/entitlements";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * GET /api/plans
  * Get current user's plan and entitlements

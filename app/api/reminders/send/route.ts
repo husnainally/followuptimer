@@ -12,6 +12,11 @@ import {
 } from "@/lib/reminder-suppression";
 import { getUserPreferences } from "@/lib/user-preferences";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 async function handler(request: Request) {
   try {
     const isProduction = process.env.NODE_ENV === "production";

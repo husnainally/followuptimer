@@ -10,6 +10,11 @@ import {
 } from "@/lib/user-preferences";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // GET /api/preferences - Get user's preferences
 export async function GET() {
   try {

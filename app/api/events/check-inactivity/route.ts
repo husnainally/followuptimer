@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/events";
 import { processEventForTriggers } from "@/lib/trigger-manager";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * POST /api/events/check-inactivity
  * Scheduled endpoint to check for user inactivity and log inactivity_detected events

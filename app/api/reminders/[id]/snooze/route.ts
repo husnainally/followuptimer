@@ -15,6 +15,11 @@ import {
 } from "@/lib/snooze-rules";
 import { getUserPreferences } from "@/lib/user-preferences";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // Snooze a reminder by adding time to it
 export async function POST(
   request: Request,
