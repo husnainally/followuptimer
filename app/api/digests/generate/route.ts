@@ -15,6 +15,11 @@ import { createInAppNotification } from "@/lib/in-app-notification";
 import { getUserPreferences } from "@/lib/user-preferences";
 import { getToneSubject } from "@/lib/tone-system";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = [1000, 2000, 4000]; // Exponential backoff: 1s, 2s, 4s

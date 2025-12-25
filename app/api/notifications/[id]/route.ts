@@ -1,6 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // DELETE a specific notification (sent log)
 export async function DELETE(
   request: Request,

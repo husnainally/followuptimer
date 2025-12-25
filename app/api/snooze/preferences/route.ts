@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { getUserSnoozePreferences } from "@/lib/snooze-rules";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // GET /api/snooze/preferences - Get user snooze preferences
 export async function GET(request: Request) {
   try {

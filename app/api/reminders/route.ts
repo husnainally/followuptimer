@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { scheduleReminder } from "@/lib/qstash";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     const supabase = await createClient();

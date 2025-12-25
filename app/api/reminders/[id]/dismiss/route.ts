@@ -3,6 +3,11 @@ import { NextResponse } from 'next/server';
 import { cancelScheduledReminder } from '@/lib/qstash';
 import { logEvent } from '@/lib/events';
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // Dismiss a reminder
 export async function POST(
   request: Request,

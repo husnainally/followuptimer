@@ -9,6 +9,11 @@ import { headers } from "next/headers";
 import Stripe from "stripe";
 import { UserPlan } from "@/lib/plans";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // Initialize Stripe (only if webhook secret is configured)
 const stripe =
   process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET

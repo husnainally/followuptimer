@@ -9,6 +9,11 @@ import { getUserPlan } from "@/lib/entitlements";
 import { getFeatureEntitlement } from "@/lib/entitlements";
 import type { FeatureName } from "@/lib/entitlements";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * Check if user is admin
  */

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getVapidPublicKey } from "@/lib/push-notification";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 export async function GET() {
   try {
     const publicKey = getVapidPublicKey();

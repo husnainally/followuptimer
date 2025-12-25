@@ -9,6 +9,11 @@ import { getUserPlan } from "@/lib/entitlements";
 import { startTrial, forceStartTrial, expireTrial } from "@/lib/trials";
 import { PlanType, SubscriptionStatus } from "@/lib/plans";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * Check if user is admin
  */

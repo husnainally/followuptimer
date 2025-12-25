@@ -1,6 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // GET all in-app notifications for the authenticated user
 export async function GET() {
   try {

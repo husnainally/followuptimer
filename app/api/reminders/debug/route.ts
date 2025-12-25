@@ -1,6 +1,11 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { NextResponse } from "next/server";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * Debug endpoint to check QStash configuration and reminder status
  * GET /api/reminders/debug?reminderId=uuid

@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getReminderAuditTimeline, getReminderSuppressionDetails } from "@/lib/trust-audit";
 import { NextResponse } from "next/server";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

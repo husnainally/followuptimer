@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getUserAffirmationAnalytics } from "@/lib/affirmation-analytics";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // GET /api/analytics/affirmations/user?range=7d
 export async function GET(request: Request) {
   try {

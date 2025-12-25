@@ -5,6 +5,11 @@ import { getUserPreferences } from "@/lib/user-preferences";
 import { scheduleReminder } from "@/lib/qstash";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 // POST /api/reminders/create-followup - Create follow-up reminder from completed reminder
 export async function POST(request: Request) {
   try {

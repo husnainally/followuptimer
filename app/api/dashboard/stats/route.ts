@@ -3,6 +3,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { NextResponse } from "next/server";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, addDays } from "date-fns";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 export async function GET() {
   try {
     const supabase = await createClient();

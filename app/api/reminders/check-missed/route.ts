@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/events";
 import { processEventForTriggers } from "@/lib/trigger-manager";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 /**
  * POST /api/reminders/check-missed
  * Scheduled endpoint to check for missed reminders and log reminder_missed events

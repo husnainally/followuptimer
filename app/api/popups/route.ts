@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { getNextPopup, createPopup, type PopupTemplateType } from "@/lib/popup-trigger";
 import { logEvent } from "@/lib/events";
 
+// Route segment config
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+
 function getStringFromUnknown(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
