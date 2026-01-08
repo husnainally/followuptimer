@@ -16,16 +16,24 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     // Verify this is an internal request (from cron or with secret)
-    // Support both Vercel cron (x-vercel-cron header) and custom auth (Authorization header)
+    // Vercel automatically adds CRON_SECRET to Authorization header
+    // Also support x-vercel-cron header and custom MISSED_REMINDERS_CRON_SECRET
     const vercelCronHeader = request.headers.get("x-vercel-cron");
     const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
     const expectedSecret = process.env.MISSED_REMINDERS_CRON_SECRET;
 
-    // Allow if it's from Vercel cron OR if secret matches (if secret is configured)
+    // Allow if:
+    // 1. It's from Vercel cron (x-vercel-cron header), OR
+    // 2. Authorization matches CRON_SECRET (Vercel's automatic header), OR
+    // 3. Authorization matches MISSED_REMINDERS_CRON_SECRET (custom secret), OR
+    // 4. No secrets configured (development mode)
     const isVercelCron = vercelCronHeader === "1";
-    const hasValidSecret = !expectedSecret || authHeader === `Bearer ${expectedSecret}`;
+    const hasVercelSecret = cronSecret && authHeader === `Bearer ${cronSecret}`;
+    const hasCustomSecret = expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+    const noSecretsConfigured = !cronSecret && !expectedSecret;
 
-    if (!isVercelCron && !hasValidSecret) {
+    if (!isVercelCron && !hasVercelSecret && !hasCustomSecret && !noSecretsConfigured) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
