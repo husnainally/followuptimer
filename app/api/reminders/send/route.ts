@@ -16,7 +16,6 @@ import { getUserPreferences } from "@/lib/user-preferences";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-
 async function handler(request: Request) {
   try {
     const isProduction = process.env.NODE_ENV === "production";
@@ -59,7 +58,23 @@ async function handler(request: Request) {
     const profile = reminder.profiles;
     const timezone = profile?.timezone || "UTC";
     const scheduledTime = new Date(reminder.remind_at);
-    
+
+    // Log reminder_due event when reminder time is reached
+    const { logEvent } = await import("@/lib/events");
+    await logEvent({
+      userId: reminder.user_id,
+      eventType: "reminder_due",
+      eventData: {
+        reminder_id: reminderId,
+        remind_at: scheduledTime.toISOString(),
+        notification_method: reminder.notification_method,
+      },
+      source: "scheduler",
+      reminderId: reminderId,
+      contactId: reminder.contact_id || undefined,
+      useServiceClient: true,
+    });
+
     const suppressionCheck = await checkReminderSuppression(
       reminder.user_id,
       reminderId,
@@ -81,7 +96,7 @@ async function handler(request: Request) {
       if (suppressionCheck.nextAttemptTime) {
         const { rescheduleReminder } = await import("@/lib/qstash");
         const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-        
+
         if (appUrl && reminder.qstash_message_id) {
           try {
             const newQstashMessageId = await rescheduleReminder(
@@ -92,7 +107,7 @@ async function handler(request: Request) {
                 callbackUrl: `${appUrl}/api/reminders/send`,
               }
             );
-            
+
             await supabase
               .from("reminders")
               .update({
@@ -119,12 +134,13 @@ async function handler(request: Request) {
     // Get user preferences for notification channels and category controls
     const userPrefs = await getUserPreferences(reminder.user_id);
     const notificationChannels = userPrefs.notification_channels || ["email"];
-    
+
     // Determine reminder category (simplified: check if it's a follow-up by contact_id)
     const isFollowup = !!reminder.contact_id;
-    const isAffirmation = reminder.message.toLowerCase().includes("affirmation") || 
-                          reminder.message.toLowerCase().includes("motivation");
-    const categoryEnabled = isFollowup 
+    const isAffirmation =
+      reminder.message.toLowerCase().includes("affirmation") ||
+      reminder.message.toLowerCase().includes("motivation");
+    const categoryEnabled = isFollowup
       ? userPrefs.category_notifications.followups
       : isAffirmation
       ? userPrefs.category_notifications.affirmations
@@ -134,7 +150,11 @@ async function handler(request: Request) {
     if (!categoryEnabled) {
       logInfo("Reminder notification skipped - category disabled", {
         reminderId: reminder.id,
-        category: isFollowup ? "followups" : isAffirmation ? "affirmations" : "general",
+        category: isFollowup
+          ? "followups"
+          : isAffirmation
+          ? "affirmations"
+          : "general",
       });
       return NextResponse.json({
         success: false,
@@ -146,11 +166,17 @@ async function handler(request: Request) {
 
     // Generate affirmation
     const affirmation = generateAffirmation(reminder.tone);
-    
+
     // Check notification channels from preferences
-    const emailEnabled = notificationChannels.includes("email") && (profile?.email_notifications ?? true);
-    const pushEnabled = notificationChannels.includes("push") && (profile?.push_notifications ?? false);
-    const inAppEnabled = notificationChannels.includes("in_app") && (profile?.in_app_notifications ?? true);
+    const emailEnabled =
+      notificationChannels.includes("email") &&
+      (profile?.email_notifications ?? true);
+    const pushEnabled =
+      notificationChannels.includes("push") &&
+      (profile?.push_notifications ?? false);
+    const inAppEnabled =
+      notificationChannels.includes("in_app") &&
+      (profile?.in_app_notifications ?? true);
 
     if (!isProduction) {
       console.log("[Webhook] User preferences:", {
@@ -437,7 +463,6 @@ async function handler(request: Request) {
       .eq("id", reminderId);
 
     // Log reminder_triggered event when reminder actually fires (before checking success)
-    const { logEvent } = await import("@/lib/events");
     await logEvent({
       userId: reminder.user_id,
       eventType: "reminder_triggered",
@@ -483,11 +508,15 @@ async function handler(request: Request) {
 
       // Update streak tracking (which will create streak_incremented trigger if needed)
       if (eventResult.success) {
-        const { updateStreakOnCompletion } = await import("@/lib/streak-tracking");
+        const { updateStreakOnCompletion } = await import(
+          "@/lib/streak-tracking"
+        );
         await updateStreakOnCompletion(reminder.user_id, reminderId);
-        
+
         // Also process the reminder_completed event for any other triggers
-        const { processEventForTriggers } = await import("@/lib/trigger-manager");
+        const { processEventForTriggers } = await import(
+          "@/lib/trigger-manager"
+        );
         await processEventForTriggers(
           reminder.user_id,
           "reminder_completed",
