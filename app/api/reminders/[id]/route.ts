@@ -11,15 +11,48 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params (Next.js 15+ requires this)
     const { id } = await params;
+    
+    if (!id) {
+      console.error("GET /api/reminders/[id]: Missing reminder ID");
+      return NextResponse.json(
+        { error: "Reminder ID is required" },
+        { status: 400 }
+      );
+    }
+
+    console.log("GET /api/reminders/[id]: Fetching reminder", { reminderId: id });
+
     const supabase = await createClient();
+    
+    if (!supabase) {
+      console.error("GET /api/reminders/[id]: Failed to create Supabase client");
+      return NextResponse.json(
+        { error: "Database connection failed" },
+        { status: 500 }
+      );
+    }
+
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
+    if (authError) {
+      console.error("GET /api/reminders/[id]: Auth error", authError);
+      return NextResponse.json(
+        { error: "Authentication failed", details: authError.message },
+        { status: 401 }
+      );
+    }
+
     if (!user) {
+      console.error("GET /api/reminders/[id]: No user found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    console.log("GET /api/reminders/[id]: User authenticated", { userId: user.id });
 
     const { data: reminder, error } = await supabase
       .from("reminders")
@@ -28,21 +61,64 @@ export async function GET(
       .eq("user_id", user.id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("GET /api/reminders/[id]: Database error", {
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        reminderId: id,
+        userId: user.id,
+      });
+      
+      // Handle specific Supabase error codes
+      if (error.code === "PGRST116") {
+        // No rows returned
+        console.warn("GET /api/reminders/[id]: Reminder not found (PGRST116)", {
+          reminderId: id,
+          userId: user.id,
+        });
+        return NextResponse.json(
+          { error: "Reminder not found" },
+          { status: 404 }
+        );
+      }
+      
+      throw error;
+    }
 
     if (!reminder) {
+      console.warn("GET /api/reminders/[id]: Reminder not found", {
+        reminderId: id,
+        userId: user.id,
+      });
       return NextResponse.json(
         { error: "Reminder not found" },
         { status: 404 }
       );
     }
 
+    console.log("GET /api/reminders/[id]: Success", { reminderId: id });
     return NextResponse.json({ reminder });
   } catch (error: unknown) {
-    console.error("Failed to fetch reminder:", error);
+    console.error("GET /api/reminders/[id]: Unexpected error", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined,
+    });
+    
     const message =
       error instanceof Error ? error.message : "Failed to fetch reminder";
-    return NextResponse.json({ error: message }, { status: 500 });
+    
+    return NextResponse.json(
+      { 
+        error: message,
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error instanceof Error ? error.stack : String(error)
+        })
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -52,6 +128,13 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: "Reminder ID is required" },
+        { status: 400 }
+      );
+    }
     const supabase = await createClient();
     const {
       data: { user },
@@ -130,6 +213,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: "Reminder ID is required" },
+        { status: 400 }
+      );
+    }
     const supabase = await createClient();
     const {
       data: { user },
