@@ -254,7 +254,8 @@ export async function POST(
         await supabase
           .from("reminders")
           .update({ qstash_message_id: newQstashMessageId })
-          .eq("id", updatedReminder.id);
+          .eq("id", updatedReminder.id)
+          .eq("user_id", user.id);
       } catch (qstashError) {
         console.error("QStash rescheduling failed (non-fatal):", qstashError);
       }

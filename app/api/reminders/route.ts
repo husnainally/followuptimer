@@ -150,7 +150,8 @@ export async function POST(request: Request) {
         await supabase
           .from("reminders")
           .update({ qstash_message_id: qstashMessageId })
-          .eq("id", reminder.id);
+          .eq("id", reminder.id)
+          .eq("user_id", user.id);
       } catch (qstashError) {
         console.error("[QStash] Scheduling failed:", {
           error: qstashError,
@@ -163,7 +164,8 @@ export async function POST(request: Request) {
         await supabase
           .from("reminders")
           .update({ status: "scheduling_failed" })
-          .eq("id", reminder.id);
+          .eq("id", reminder.id)
+          .eq("user_id", user.id);
       }
     } else {
       const missing = [];

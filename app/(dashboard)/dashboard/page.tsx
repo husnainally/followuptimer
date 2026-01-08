@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Plus,
   Clock,
@@ -17,19 +17,19 @@ import {
   ClipboardList,
   AlertTriangle,
   type LucideIcon,
-} from 'lucide-react';
-import { RemindersTable } from '../reminders-table';
-import { createClient } from '@/lib/supabase/client';
-import { toast } from 'sonner';
-import { Skeleton } from '@/components/ui/skeleton';
-import { AffirmationBar } from '@/components/affirmation-bar';
-import { QuickAddReminder } from '@/components/quick-add-reminder';
+} from "lucide-react";
+import { RemindersTable } from "../reminders-table";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AffirmationBar } from "@/components/affirmation-bar";
+import { QuickAddReminder } from "@/components/quick-add-reminder";
 import {
   DashboardCard,
   TrustIndicators,
   WeeklyDigestPreview,
-} from '@/components/dashboard/dashboard-cards';
-import { EmptyState } from '@/components/ui/empty-state';
+} from "@/components/dashboard/dashboard-cards";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface DashboardStats {
   today: { count: number; reminders: any[] };
@@ -52,7 +52,7 @@ export default function DashboardPage() {
   const [reminders, setReminders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [tonePreference, setTonePreference] = useState<string>('motivational');
+  const [tonePreference, setTonePreference] = useState<string>("motivational");
 
   useEffect(() => {
     fetchData();
@@ -60,10 +60,14 @@ export default function DashboardPage() {
 
   function calculateLocalStats(reminders: any[]) {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
     const todayEnd = new Date(todayStart);
     todayEnd.setHours(23, 59, 59, 999);
-    
+
     const weekStart = new Date(now);
     weekStart.setDate(now.getDate() - now.getDay() + 1); // Monday
     weekStart.setHours(0, 0, 0, 0);
@@ -89,7 +93,9 @@ export default function DashboardPage() {
     const atRiskThreshold = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const atRiskReminders = reminders.filter((r) => {
       const remindAt = new Date(r.remind_at);
-      return remindAt >= now && remindAt <= atRiskThreshold && r.status === "pending";
+      return (
+        remindAt >= now && remindAt <= atRiskThreshold && r.status === "pending"
+      );
     });
 
     setStats({
@@ -114,11 +120,22 @@ export default function DashboardPage() {
     try {
       const supabase = createClient();
 
-      // Fetch reminders
+      // Get authenticated user first
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw new Error("User not authenticated");
+      }
+
+      // Fetch reminders - CRITICAL: Filter by user_id to prevent data leakage
       const { data: remindersData, error: remindersError } = await supabase
-        .from('reminders')
-        .select('*')
-        .order('remind_at', { ascending: true });
+        .from("reminders")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("remind_at", { ascending: true });
 
       if (remindersError) throw remindersError;
       const remindersList = remindersData || [];
@@ -126,31 +143,28 @@ export default function DashboardPage() {
 
       // Fetch dashboard stats
       try {
-        const statsResponse = await fetch('/api/dashboard/stats');
+        const statsResponse = await fetch("/api/dashboard/stats");
         if (statsResponse.ok) {
           const statsData = await statsResponse.json();
           setStats(statsData);
         } else {
           const errorData = await statsResponse.json().catch(() => ({}));
-          console.error('Failed to fetch dashboard stats:', errorData);
+          console.error("Failed to fetch dashboard stats:", errorData);
           // Fallback: calculate stats from local reminders
           calculateLocalStats(remindersList);
         }
       } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
+        console.error("Error fetching dashboard stats:", error);
         // Fallback: calculate stats from local reminders
         calculateLocalStats(remindersList);
       }
 
-      // Fetch user profile for tone preference
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      // Fetch user profile for tone preference (reuse user from above)
       if (user) {
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('tone_preference')
-          .eq('id', user.id)
+          .from("profiles")
+          .select("tone_preference")
+          .eq("id", user.id)
           .single();
 
         if (profile?.tone_preference) {
@@ -158,55 +172,55 @@ export default function DashboardPage() {
         }
       }
     } catch (error: any) {
-      toast.error('Failed to load dashboard data');
+      toast.error("Failed to load dashboard data");
       console.error(error);
     } finally {
       setLoading(false);
     }
   }
-  const upcomingCount = reminders.filter((r) => r.status === 'pending').length;
+  const upcomingCount = reminders.filter((r) => r.status === "pending").length;
 
   if (loading) {
     return (
-      <div className='flex flex-col gap-6 p-4 md:p-6 animate-[fadeIn_0.3s_ease-in-out_forwards]'>
+      <div className="flex flex-col gap-6 p-4 md:p-6 animate-[fadeIn_0.3s_ease-in-out_forwards]">
         {/* Stats Cards Skeleton */}
-        <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className='relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-card'
+              className="relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-card"
             >
-              <div className='relative flex flex-col gap-6 p-5'>
-                <div className='flex items-center justify-between'>
-                  <div className='flex items-center gap-3'>
-                    <Skeleton className='size-11 rounded-2xl' />
-                    <Skeleton className='h-4 w-32' />
+              <div className="relative flex flex-col gap-6 p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-11 rounded-2xl" />
+                    <Skeleton className="h-4 w-32" />
                   </div>
                 </div>
-                <Skeleton className='h-10 w-20' />
+                <Skeleton className="h-10 w-20" />
               </div>
             </div>
           ))}
         </div>
 
         {/* Reminders Table Card Skeleton */}
-        <Card className='bg-card'>
-          <CardHeader className='flex items-center justify-between bg-card'>
-            <div className='space-y-2'>
-              <Skeleton className='h-6 w-40' />
-              <Skeleton className='h-4 w-64' />
+        <Card className="bg-card">
+          <CardHeader className="flex items-center justify-between bg-card">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-4 w-64" />
             </div>
-            <Skeleton className='h-10 w-32' />
+            <Skeleton className="h-10 w-32" />
           </CardHeader>
-          <CardContent className='space-y-4'>
+          <CardContent className="space-y-4">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className='flex items-center gap-4'>
-                <Skeleton className='h-12 w-12 rounded-lg' />
-                <div className='flex-1 space-y-2'>
-                  <Skeleton className='h-4 w-full' />
-                  <Skeleton className='h-4 w-3/4' />
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
                 </div>
-                <Skeleton className='h-8 w-20' />
+                <Skeleton className="h-8 w-20" />
               </div>
             ))}
           </CardContent>
@@ -217,29 +231,29 @@ export default function DashboardPage() {
 
   const statCards = [
     {
-      title: 'Upcoming Reminders',
+      title: "Upcoming Reminders",
       value: upcomingCount,
-      description: 'Scheduled for this week',
+      description: "Scheduled for this week",
       icon: Clock,
     },
     {
-      title: 'Total Created',
+      title: "Total Created",
       value: reminders.length,
-      description: 'All time',
+      description: "All time",
       icon: ClipboardList,
     },
     {
-      title: 'Preferred Tone',
-      value: tonePreference || 'Not set',
-      description: 'Your affirmation style',
+      title: "Preferred Tone",
+      value: tonePreference || "Not set",
+      description: "Your affirmation style",
       icon: Bell,
     },
   ];
 
   return (
-    <div className='flex flex-col gap-6'>
+    <div className="flex flex-col gap-6">
       {/* Today / This Week Snapshot */}
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <DashboardCard
           title="Due Today"
           count={stats?.today.count ?? 0}
@@ -278,9 +292,7 @@ export default function DashboardPage() {
         <Card className="bg-card">
           <CardHeader>
             <CardTitle className="text-base">Trust & Status</CardTitle>
-            <CardDescription>
-              System health and upcoming digest
-            </CardDescription>
+            <CardDescription>System health and upcoming digest</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {stats.trust && (
@@ -308,17 +320,17 @@ export default function DashboardPage() {
       <QuickAddReminder onReminderCreated={fetchData} />
 
       {/* Reminders Table Section */}
-      <Card className='bg-card'>
-        <CardHeader className='flex flex-col gap-3 bg-card sm:flex-row sm:items-center sm:justify-between'>
+      <Card className="bg-card">
+        <CardHeader className="flex flex-col gap-3 bg-card sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Your Reminders</CardTitle>
             <CardDescription>
               All your upcoming and past reminders
             </CardDescription>
           </div>
-          <Link href='/reminder/create' className='w-full sm:w-auto'>
-            <Button className='w-full gap-2 bg-primary hover:bg-primary/90 sm:w-auto'>
-              <Plus className='w-4 h-4' />
+          <Link href="/reminder/create" className="w-full sm:w-auto">
+            <Button className="w-full gap-2 bg-primary hover:bg-primary/90 sm:w-auto">
+              <Plus className="w-4 h-4" />
               New Reminder
             </Button>
           </Link>
@@ -337,7 +349,10 @@ export default function DashboardPage() {
               />
             </div>
           ) : (
-            <RemindersTable reminders={reminders} onReminderDeleted={fetchData} />
+            <RemindersTable
+              reminders={reminders}
+              onReminderDeleted={fetchData}
+            />
           )}
         </CardContent>
       </Card>
@@ -354,25 +369,25 @@ type StatCardProps = {
 
 function StatCard({ title, description, value, icon: Icon }: StatCardProps) {
   return (
-    <div className='relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-card'>
+    <div className="relative overflow-hidden rounded-3xl border border-border/80 shadow-sm bg-card">
       {/* Decorative accent blue spot, top right only */}
-      <div className='pointer-events-none absolute top-0 right-0 w-32 h-20 rounded-full bg-primary blur-2xl opacity-70 -translate-y-1/3 translate-x-1/3' />
-      <div className='relative flex flex-col gap-6 p-5'>
-        <div className='flex items-center justify-between'>
-          <div className='flex items-center gap-3'>
-            <span className='inline-flex size-11 items-center justify-center rounded-2xl bg-muted/40 text-primary'>
-              <Icon className='h-6 w-6' />
+      <div className="pointer-events-none absolute top-0 right-0 w-32 h-20 rounded-full bg-primary blur-2xl opacity-70 -translate-y-1/3 translate-x-1/3" />
+      <div className="relative flex flex-col gap-6 p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex size-11 items-center justify-center rounded-2xl bg-muted/40 text-primary">
+              <Icon className="h-6 w-6" />
             </span>
-            <div className='text-sm font-medium text-muted-foreground'>
+            <div className="text-sm font-medium text-muted-foreground">
               {title}
             </div>
           </div>
         </div>
-        <div className='text-4xl font-semibold tracking-tight text-foreground'>
-          {typeof value === 'number' ? (
+        <div className="text-4xl font-semibold tracking-tight text-foreground">
+          {typeof value === "number" ? (
             value
           ) : (
-            <span className='text-2xl font-semibold capitalize text-foreground'>
+            <span className="text-2xl font-semibold capitalize text-foreground">
               {value}
             </span>
           )}
