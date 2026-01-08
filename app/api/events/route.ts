@@ -37,10 +37,12 @@ export async function POST(request: Request) {
     // Validate event_type
     const validEventTypes: EventType[] = [
       "reminder_created",
+      "reminder_triggered",
       "reminder_completed",
       "reminder_snoozed",
       "reminder_dismissed",
       "reminder_missed",
+      "reminder_overdue",
       "reminder_due",
       "reminder_scheduled",
       "task_completed",
@@ -70,6 +72,7 @@ export async function POST(request: Request) {
       "snooze_cancelled",
       "suggestion_shown",
       "suggestion_clicked",
+      "trial_expired",
     ];
 
     if (!validEventTypes.includes(event_type as EventType)) {

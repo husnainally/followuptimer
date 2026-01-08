@@ -217,6 +217,20 @@ export async function POST(
             timezone
           );
 
+          // Log follow_up_required event when follow-up is needed
+          await logEvent({
+            userId: user.id,
+            eventType: "follow_up_required",
+            eventData: {
+              reminder_id: popup.reminder_id,
+              contact_id: reminder.contact_id,
+              suggested_date: followupDate.toISOString(),
+            },
+            source: "app",
+            reminderId: popup.reminder_id,
+            contactId: reminder.contact_id,
+          });
+
           const { createPopup } = await import("@/lib/popup-trigger");
           await createPopup({
             userId: user.id,
