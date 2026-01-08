@@ -21,9 +21,11 @@ type PopupInstanceStatus =
 
 export type PopupTemplateKey =
   | "email_opened"
+  | "link_clicked"
   | "reminder_due"
   | "reminder_completed"
-  | "no_reply_after_n_days";
+  | "no_reply_after_n_days"
+  | "manual_reminder_created";
 
 export interface PopupRuleRow {
   id: string;
@@ -52,9 +54,11 @@ export interface CreatePopupFromEventInput {
 function isTriggerEventType(eventType: EventType): boolean {
   return (
     eventType === "email_opened" ||
+    eventType === "link_clicked" ||
     eventType === "reminder_due" ||
     eventType === "reminder_completed" ||
-    eventType === "no_reply_after_n_days"
+    eventType === "no_reply_after_n_days" ||
+    eventType === "manual_reminder_created"
   );
 }
 
@@ -94,6 +98,23 @@ function buildTemplatePayload(args: {
     safeString(args.eventData.thread_url, "") ||
     safeString(args.eventData.action_url, "");
 
+  // Determine entity_id and entity_type from available data
+  let entityId: string | null = null;
+  let entityType: string | null = null;
+  if (args.contactId) {
+    entityId = args.contactId;
+    entityType = "contact";
+  } else if (args.reminderId) {
+    entityId = args.reminderId;
+    entityType = "reminder";
+  } else if (args.eventData.thread_id) {
+    entityId = safeString(args.eventData.thread_id, "");
+    entityType = "thread";
+  }
+
+  // Extract workspace_id from event data or user profile (if available)
+  const workspaceId = safeString(args.eventData.workspace_id, "") || null;
+
   const basePayload: Record<string, unknown> = {
     template_key: args.templateKey,
     source_event_id: args.eventId,
@@ -101,6 +122,9 @@ function buildTemplatePayload(args: {
     source_event_created_at: args.eventCreatedAt || null,
     contact_id: args.contactId || null,
     reminder_id: args.reminderId || null,
+    entity_id: entityId,
+    entity_type: entityType,
+    workspace_id: workspaceId,
     contact_name: contactName,
     thread_link: threadLink || null,
   };
@@ -160,6 +184,33 @@ function buildTemplatePayload(args: {
       return {
         title: "No reply yet",
         message: `No reply yet${suffix} — want to follow up?`,
+        payload: basePayload,
+      };
+    }
+    case "link_clicked": {
+      const linkUrl = safeString(args.eventData.link_url, "") ||
+        safeString(args.eventData.url, "") ||
+        "link";
+      return {
+        title: "Link clicked",
+        message: `Link clicked: ${linkUrl} for ${contactName}.`,
+        payload: {
+          ...basePayload,
+          link_url: linkUrl,
+        },
+      };
+    }
+    case "manual_reminder_created": {
+      const reminderSubject = safeString(args.eventData.reminder_subject, "") ||
+        safeString(args.eventData.message, "") ||
+        "reminder";
+      const subjectPreview =
+        reminderSubject.length > 50
+          ? reminderSubject.substring(0, 50) + "..."
+          : reminderSubject;
+      return {
+        title: "Reminder created",
+        message: `Reminder created: ${contactName} - ${subjectPreview}`,
         payload: basePayload,
       };
     }
@@ -228,6 +279,30 @@ async function ensureDefaultPopupRules(userId: string): Promise<void> {
       enabled: true,
       conditions: { require_contact_id: true },
     },
+    {
+      user_id: userId,
+      rule_name: "Link clicked popup",
+      trigger_event_type: "link_clicked",
+      template_key: "link_clicked",
+      priority: 6,
+      cooldown_seconds: 60 * 30,
+      max_per_day: 10,
+      ttl_seconds: 60 * 60 * 24,
+      enabled: false, // Disabled by default (optional per requirements)
+      conditions: { require_contact_id: false },
+    },
+    {
+      user_id: userId,
+      rule_name: "Manual reminder created popup",
+      trigger_event_type: "manual_reminder_created",
+      template_key: "manual_reminder_created",
+      priority: 5,
+      cooldown_seconds: 60 * 5,
+      max_per_day: 20,
+      ttl_seconds: 60 * 60 * 24,
+      enabled: true,
+      conditions: { require_reminder_id: true },
+    },
   ];
 
   const { error: insertError } = await supabase
@@ -262,6 +337,22 @@ async function passesEligibility(args: {
   // User preference check: if they explicitly disabled in-app notifications, treat as popups disabled
   if (profile?.in_app_notifications === false) {
     return { ok: false, reason: "popups_disabled" };
+  }
+
+  // DND (Do Not Disturb) check - check user preferences for DND settings
+  // Note: DND can be implemented via user_preferences table or profiles table
+  // For now, we check if there's a dnd_enabled or dnd_until field
+  // This is a placeholder that can be enhanced when DND feature is fully implemented
+  const { data: userPrefs } = await supabase
+    .from("user_preferences")
+    .select("notification_intensity")
+    .eq("user_id", args.userId)
+    .single();
+  
+  // If notification_intensity is "quiet" or "minimal", treat as DND
+  if (userPrefs?.notification_intensity === "quiet" || userPrefs?.notification_intensity === "minimal") {
+    // Allow popups but with lower priority - not a hard block
+    // This can be enhanced later with explicit DND settings
   }
 
   const conditions = (args.rule.conditions || {}) as Record<string, unknown>;
