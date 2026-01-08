@@ -284,10 +284,16 @@ async function processUserDigest(userInfo: {
 export async function POST(request: Request) {
   try {
     // Verify this is an internal request (from cron or with secret)
+    // Support both Vercel cron (x-vercel-cron header) and custom auth (Authorization header)
+    const vercelCronHeader = request.headers.get("x-vercel-cron");
     const authHeader = request.headers.get("authorization");
     const expectedSecret = process.env.DIGEST_CRON_SECRET;
 
-    if (expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
+    // Allow if it's from Vercel cron OR if secret matches (if secret is configured)
+    const isVercelCron = vercelCronHeader === "1";
+    const hasValidSecret = !expectedSecret || authHeader === `Bearer ${expectedSecret}`;
+
+    if (!isVercelCron && !hasValidSecret) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

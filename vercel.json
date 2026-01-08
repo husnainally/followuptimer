@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/reminders/check-missed",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/events/check-inactivity",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/expire-trials",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

@@ -19,11 +19,17 @@ export const runtime = "nodejs";
  */
 export async function POST(request: Request) {
   try {
-    // Verify cron secret (if configured)
+    // Verify this is an internal request (from cron or with secret)
+    // Support both Vercel cron (x-vercel-cron header) and custom auth (Authorization header)
+    const vercelCronHeader = request.headers.get("x-vercel-cron");
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
-    
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+
+    // Allow if it's from Vercel cron OR if secret matches (if secret is configured)
+    const isVercelCron = vercelCronHeader === "1";
+    const hasValidSecret = !cronSecret || authHeader === `Bearer ${cronSecret}`;
+
+    if (!isVercelCron && !hasValidSecret) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
