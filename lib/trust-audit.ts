@@ -105,15 +105,36 @@ export function getSuppressionRuleName(reasonCode: string): string {
 }
 
 /**
- * Get audit timeline for a reminder
+ * Get audit timeline for a reminder with pagination
  */
 export async function getReminderAuditTimeline(
   userId: string,
   reminderId: string,
-  limit: number = 50
-): Promise<ReminderAuditEvent[]> {
+  limit: number = 20,
+  offset: number = 0
+): Promise<{ events: ReminderAuditEvent[]; hasMore: boolean; total: number }> {
   try {
     const supabase = createServiceClient();
+    
+    // Get total count
+    const { count, error: countError } = await supabase
+      .from("events")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("reminder_id", reminderId)
+      .in("event_type", [
+        "reminder_created",
+        "reminder_triggered",
+        "reminder_snoozed",
+        "reminder_suppressed",
+        "reminder_completed",
+        "reminder_dismissed",
+        "reminder_overdue",
+      ]);
+
+    if (countError) throw countError;
+
+    // Get paginated events
     const { data, error } = await supabase
       .from("events")
       .select("*")
@@ -129,13 +150,21 @@ export async function getReminderAuditTimeline(
         "reminder_overdue",
       ])
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    return data || [];
+    
+    const total = count || 0;
+    const hasMore = offset + (data?.length || 0) < total;
+
+    return {
+      events: data || [],
+      hasMore,
+      total,
+    };
   } catch (error) {
     console.error("Failed to fetch reminder audit timeline:", error);
-    return [];
+    return { events: [], hasMore: false, total: 0 };
   }
 }
 

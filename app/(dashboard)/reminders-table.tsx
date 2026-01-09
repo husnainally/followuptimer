@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SwipeableReminderCard } from '@/components/reminder/swipeable-reminder-card';
 
 export interface Reminder {
   id: string;
@@ -114,6 +115,47 @@ export function RemindersTable({
       setIsDeleting(false);
     }
   };
+
+  const handleComplete = async (reminderId: string) => {
+    try {
+      const response = await fetch(`/api/reminders/${reminderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'sent' }),
+      });
+
+      if (!response.ok) throw new Error('Failed to complete reminder');
+
+      toast.success('Reminder completed');
+      if (onReminderDeleted) {
+        onReminderDeleted();
+      }
+    } catch (error) {
+      console.error('Failed to complete reminder:', error);
+      throw error;
+    }
+  };
+
+  const handleSnooze = async (reminderId: string) => {
+    try {
+      // Default snooze: 1 hour
+      const response = await fetch(`/api/reminders/${reminderId}/snooze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes: 60 }),
+      });
+
+      if (!response.ok) throw new Error('Failed to snooze reminder');
+
+      toast.success('Reminder snoozed for 1 hour');
+      if (onReminderDeleted) {
+        onReminderDeleted();
+      }
+    } catch (error) {
+      console.error('Failed to snooze reminder:', error);
+      throw error;
+    }
+  };
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
@@ -141,53 +183,17 @@ export function RemindersTable({
   )
 
   const mobileCards = reminders.map((reminder) => (
-    <div key={`reminder-card-${reminder.id}`} className='rounded-3xl border border-border/60 bg-card p-5 space-y-4 shadow-sm'>
-      <div className='space-y-2'>
-        <p className='text-base font-semibold text-foreground line-clamp-3'>
-          {reminder.message}
-        </p>
-        <p className='text-sm text-muted-foreground flex items-center gap-2'>
-          <span className='inline-flex size-2 rounded-full bg-primary'></span>
-          {formatDate(reminder.remind_at)}
-        </p>
-      </div>
-      <div className='flex items-center gap-3 text-sm'>
-        <Badge
-          className={cn(
-            "capitalize border-0 px-3 py-1 text-xs font-medium",
-            toneBadgeClassMap[reminder.tone] ?? "bg-muted/60 text-foreground"
-          )}
-        >
-          {reminder.tone}
-        </Badge>
-        <Badge
-          className={cn(
-            "capitalize border-0 px-3 py-1 text-xs font-medium",
-            statusBadgeClassMap[reminder.status] ?? "bg-muted/60 text-foreground"
-          )}
-        >
-          {reminder.status}
-        </Badge>
-      </div>
-      <div className='flex items-center justify-end gap-3 pt-2'>
-        <Button
-          variant='ghost'
-          size='icon'
-          onClick={() => onReminderClick?.(reminder)}
-          className='rounded-full bg-muted/30 hover:bg-muted/50'
-        >
-          <Pencil className='w-4 h-4' />
-        </Button>
-        <Button
-          variant='ghost'
-          size='icon'
-          onClick={(event) => handleDeleteClick(reminder, event)}
-          className='rounded-full bg-destructive/10 text-destructive hover:bg-destructive/20'
-        >
-          <Trash2 className='w-4 h-4' />
-        </Button>
-      </div>
-    </div>
+    <SwipeableReminderCard
+      key={`reminder-card-${reminder.id}`}
+      reminder={reminder}
+      onReminderClick={onReminderClick}
+      onDeleteClick={handleDeleteClick}
+      onComplete={handleComplete}
+      onSnooze={handleSnooze}
+      toneBadgeClassMap={toneBadgeClassMap}
+      statusBadgeClassMap={statusBadgeClassMap}
+      formatDate={formatDate}
+    />
   ))
 
   const mobileEmpty = (

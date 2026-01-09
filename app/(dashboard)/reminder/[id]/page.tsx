@@ -398,7 +398,7 @@ export default function ReminderDetailPage() {
         <div className="lg:col-span-2">
           <Card className="bg-card">
             <CardHeader className="border-b border-border">
-              <CardTitle>Reminder Details</CardTitle>
+              <h1 className="leading-none font-semibold text-lg">Reminder Details</h1>
               <CardDescription>Modify your reminder settings</CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -505,6 +505,9 @@ export default function ReminderDetailPage() {
                               ? "border-primary bg-primary/5 text-primary"
                               : "border-border bg-card text-foreground hover:border-primary/50"
                           }`}
+                          aria-label={`Select ${tone} tone`}
+                          aria-pressed={form.watch("tone") === tone}
+                          role="radio"
                         >
                           {tone}
                         </button>
@@ -518,6 +521,7 @@ export default function ReminderDetailPage() {
                       type="button"
                       variant="outline"
                       onClick={() => router.back()}
+                      aria-label="Cancel and go back"
                     >
                       Cancel
                     </Button>
@@ -525,6 +529,7 @@ export default function ReminderDetailPage() {
                       type="submit"
                       disabled={isLoading}
                       className="flex-1"
+                      aria-label={isLoading ? "Saving reminder changes" : "Save reminder changes"}
                     >
                       {isLoading ? "Saving..." : "Save Changes"}
                     </Button>
@@ -541,15 +546,16 @@ export default function ReminderDetailPage() {
           {contactId && (
             <Card className="bg-card">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Quick Actions</CardTitle>
+                <h2 className="text-base leading-none font-semibold">Quick Actions</h2>
               </CardHeader>
               <CardContent className="space-y-2">
                 <Link href={`/contacts/${contactId}`}>
                   <Button
                     variant="outline"
                     className="w-full justify-start gap-2"
+                    aria-label={`View contact: ${contactName || "Contact"}`}
                   >
-                    <User className="w-4 h-4" />
+                    <User className="w-4 h-4" aria-hidden="true" />
                     View Contact: {contactName || "Contact"}
                   </Button>
                 </Link>
@@ -557,8 +563,9 @@ export default function ReminderDetailPage() {
                   variant="outline"
                   className="w-full justify-start gap-2"
                   onClick={() => setAddNoteDialogOpen(true)}
+                  aria-label="Add note to contact"
                 >
-                  <StickyNote className="w-4 h-4" />
+                  <StickyNote className="w-4 h-4" aria-hidden="true" />
                   Add Note
                 </Button>
                 {meta?.status === "sent" && (
@@ -567,8 +574,9 @@ export default function ReminderDetailPage() {
                     className="w-full justify-start gap-2"
                     onClick={handleCreateFollowup}
                     disabled={isCreatingFollowup}
+                    aria-label={isCreatingFollowup ? "Creating follow-up reminder" : "Create next follow-up reminder"}
                   >
-                    <Repeat className="w-4 h-4" />
+                    <Repeat className="w-4 h-4" aria-hidden="true" />
                     {isCreatingFollowup
                       ? "Creating..."
                       : "Create Next Follow-up"}
@@ -581,7 +589,7 @@ export default function ReminderDetailPage() {
           {/* Info Card */}
           <Card className="bg-card">
             <CardContent className="space-y-3 pt-6">
-              <p className="text-sm font-medium">Reminder Info</p>
+              <h2 className="text-sm font-medium">Reminder Info</h2>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase">
                   Created
@@ -642,10 +650,10 @@ export default function ReminderDetailPage() {
           {/* Delete Card */}
           <Card className="bg-destructive/5 border-destructive/20">
             <CardHeader className="border-b border-destructive/20">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
+              <h2 className="text-base leading-none font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" aria-hidden="true" />
                 Danger Zone
-              </CardTitle>
+              </h2>
             </CardHeader>
             <CardContent className="">
               <p className="text-sm text-muted-foreground mb-4">
@@ -657,8 +665,9 @@ export default function ReminderDetailPage() {
                   variant="destructive"
                   className="w-full gap-2"
                   onClick={() => setShowDeleteConfirm(true)}
+                  aria-label="Delete this reminder"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
                   Delete Reminder
                 </Button>
               ) : (
@@ -670,6 +679,7 @@ export default function ReminderDetailPage() {
                       variant="outline"
                       className="flex-1 bg-transparent"
                       onClick={() => setShowDeleteConfirm(false)}
+                      aria-label="Cancel deletion"
                     >
                       Cancel
                     </Button>
@@ -679,6 +689,7 @@ export default function ReminderDetailPage() {
                       className=""
                       disabled={isDeleting}
                       onClick={handleDelete}
+                      aria-label={isDeleting ? "Deleting reminder" : "Confirm delete reminder"}
                     >
                       {isDeleting ? "Deleting..." : "Delete"}
                     </Button>
@@ -720,6 +731,7 @@ export default function ReminderDetailPage() {
                 setNoteText("");
               }}
               disabled={isAddingNote}
+              aria-label="Cancel adding note"
             >
               Cancel
             </Button>
@@ -758,6 +770,7 @@ export default function ReminderDetailPage() {
                 }
               }}
               disabled={isAddingNote || !noteText.trim()}
+              aria-label={isAddingNote ? "Adding note" : "Add note to contact"}
             >
               {isAddingNote ? "Adding..." : "Add Note"}
             </Button>
