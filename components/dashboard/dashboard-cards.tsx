@@ -41,6 +41,10 @@ export function DashboardCard({
     info: "border-blue-200 bg-blue-50/50 hover:bg-blue-50",
   };
 
+  const ariaLabel = description
+    ? `${title}: ${count} ${description}`
+    : `${title}: ${count}`;
+
   const content = (
     <Card
       className={cn(
@@ -48,6 +52,19 @@ export function DashboardCard({
         variantStyles[variant]
       )}
       onClick={onClick}
+      role={href || onClick ? "button" : undefined}
+      aria-label={href || onClick ? ariaLabel : undefined}
+      tabIndex={href || onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if ((href || onClick) && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          if (onClick) {
+            onClick();
+          } else if (href) {
+            window.location.href = href;
+          }
+        }
+      }}
     >
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
@@ -60,6 +77,7 @@ export function DashboardCard({
                 variant === "success" && "bg-emerald-100 text-emerald-700",
                 variant === "info" && "bg-blue-100 text-blue-700"
               )}
+              aria-hidden="true"
             >
               <Icon className="h-5 w-5" />
             </div>
@@ -83,11 +101,15 @@ export function DashboardCard({
                 variant === "success" && "text-emerald-700",
                 variant === "info" && "text-blue-700"
               )}
+              aria-label={`${count} items`}
             >
               {count}
             </span>
             {(href || onClick) && (
-              <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+              <ChevronRight
+                className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors"
+                aria-hidden="true"
+              />
             )}
           </div>
         </div>
@@ -98,7 +120,11 @@ export function DashboardCard({
   if (href) {
     // Add query parameter for overdue tab
     const finalHref = title === "Overdue" ? `${href}?tab=overdue` : href;
-    return <Link href={finalHref}>{content}</Link>;
+    return (
+      <Link href={finalHref} aria-label={ariaLabel}>
+        {content}
+      </Link>
+    );
   }
 
   return content;

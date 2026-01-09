@@ -23,14 +23,30 @@ export async function GET(
 
     const { id } = await params;
 
-    // Fetch audit timeline
-    const timeline = await getReminderAuditTimeline(user.id, id);
+    // Get pagination parameters from query string
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
+
+    // Fetch audit timeline with pagination
+    const timelineResult = await getReminderAuditTimeline(
+      user.id,
+      id,
+      limit,
+      offset
+    );
 
     // Fetch suppression details if any
     const suppressionDetails = await getReminderSuppressionDetails(user.id, id);
 
     return NextResponse.json({
-      timeline,
+      timeline: timelineResult.events,
+      pagination: {
+        hasMore: timelineResult.hasMore,
+        total: timelineResult.total,
+        limit,
+        offset,
+      },
       suppressionDetails,
     });
   } catch (error: unknown) {

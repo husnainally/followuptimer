@@ -116,24 +116,37 @@ export function StatusExplanation({
     return null;
   }
 
+  const detailsId = `status-details-${status}`;
+  const buttonId = `status-toggle-${status}`;
+
   return (
     <Card className="bg-muted/20 border-border/70">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-muted-foreground" />
+            <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <CardTitle className="text-sm font-medium">What's happening?</CardTitle>
           </div>
           <Button
+            id={buttonId}
             variant="ghost"
             size="sm"
             onClick={() => setIsExpanded(!isExpanded)}
             className="h-8 w-8 p-0"
+            aria-label={isExpanded ? "Collapse details" : "Expand details"}
+            aria-expanded={isExpanded}
+            aria-controls={explanation.details.length > 0 ? detailsId : undefined}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setIsExpanded(!isExpanded);
+              }
+            }}
           >
             {isExpanded ? (
-              <ChevronUp className="h-4 w-4" />
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
             )}
           </Button>
         </div>
@@ -141,7 +154,12 @@ export function StatusExplanation({
       <CardContent className="pt-0">
         <p className="text-sm text-foreground mb-3">{explanation.message}</p>
         {isExpanded && explanation.details.length > 0 && (
-          <div className="space-y-2 pt-3 border-t border-border/50">
+          <div
+            id={detailsId}
+            className="space-y-2 pt-3 border-t border-border/50"
+            role="region"
+            aria-labelledby={buttonId}
+          >
             {explanation.details.map((detail, index) => (
               <div key={index} className="flex items-start justify-between gap-4">
                 <span className="text-xs text-muted-foreground font-medium">
