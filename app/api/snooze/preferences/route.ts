@@ -54,10 +54,13 @@ export async function POST(request: Request) {
       quiet_hours_start,
       quiet_hours_end,
       max_reminders_per_day,
+      cooldown_minutes,
       allow_weekends,
       default_snooze_options,
       follow_up_cadence,
       smart_suggestions_enabled,
+      dnd_enabled,
+      dnd_override_rules,
     } = body;
 
     // Get existing preferences to track changes
@@ -85,6 +88,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate cooldown_minutes
+    if (
+      cooldown_minutes !== undefined &&
+      (typeof cooldown_minutes !== "number" || cooldown_minutes < 0 || cooldown_minutes > 1440)
+    ) {
+      return NextResponse.json(
+        { error: "cooldown_minutes must be between 0 and 1440 (24 hours)" },
+        { status: 400 }
+      );
+    }
+
     // Upsert preferences
     const { data: preferences, error } = await supabase
       .from("user_snooze_preferences")
@@ -99,6 +113,7 @@ export async function POST(request: Request) {
           quiet_hours_end:
             quiet_hours_end !== undefined ? quiet_hours_end : null,
           max_reminders_per_day: max_reminders_per_day || undefined,
+          cooldown_minutes: cooldown_minutes !== undefined ? cooldown_minutes : undefined,
           allow_weekends:
             allow_weekends !== undefined ? allow_weekends : undefined,
           default_snooze_options: default_snooze_options || undefined,
@@ -107,6 +122,8 @@ export async function POST(request: Request) {
             smart_suggestions_enabled !== undefined
               ? smart_suggestions_enabled
               : undefined,
+          dnd_enabled: dnd_enabled !== undefined ? dnd_enabled : undefined,
+          dnd_override_rules: dnd_override_rules || undefined,
           updated_at: new Date().toISOString(),
         },
         {
@@ -162,6 +179,16 @@ export async function POST(request: Request) {
       });
     }
     if (
+      cooldown_minutes !== undefined &&
+      cooldown_minutes !== existingPrefs.cooldown_minutes
+    ) {
+      changes.push({
+        key: "cooldown_minutes",
+        old_value: existingPrefs.cooldown_minutes,
+        new_value: cooldown_minutes,
+      });
+    }
+    if (
       allow_weekends !== undefined &&
       allow_weekends !== existingPrefs.allow_weekends
     ) {
@@ -189,6 +216,26 @@ export async function POST(request: Request) {
         key: "follow_up_cadence",
         old_value: existingPrefs.follow_up_cadence,
         new_value: follow_up_cadence,
+      });
+    }
+    if (
+      dnd_enabled !== undefined &&
+      dnd_enabled !== existingPrefs.dnd_enabled
+    ) {
+      changes.push({
+        key: "dnd_enabled",
+        old_value: existingPrefs.dnd_enabled,
+        new_value: dnd_enabled,
+      });
+    }
+    if (
+      dnd_override_rules !== undefined &&
+      JSON.stringify(dnd_override_rules) !== JSON.stringify(existingPrefs.dnd_override_rules)
+    ) {
+      changes.push({
+        key: "dnd_override_rules",
+        old_value: existingPrefs.dnd_override_rules,
+        new_value: dnd_override_rules,
       });
     }
 

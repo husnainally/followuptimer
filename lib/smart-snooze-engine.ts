@@ -7,7 +7,10 @@ import {
   adjustToWorkingHours,
   getNextWorkingDay,
   countRemindersToday,
+  getCategorySnoozePreferences,
+  determineReminderCategory,
   type UserSnoozePreferences,
+  type ReminderCategory,
 } from "@/lib/snooze-rules";
 import { logEvent } from "@/lib/events";
 
@@ -42,7 +45,8 @@ async function getSnoozeCandidates(
   reminderId: string | undefined,
   context: SnoozeContext | undefined,
   prefs: UserSnoozePreferences,
-  timezone: string
+  timezone: string,
+  categoryPrefs?: { intensity: string; default_duration_minutes: number } | null
 ): Promise<SnoozeCandidate[]> {
   const now = new Date();
   const candidates: SnoozeCandidate[] = [];
@@ -184,7 +188,8 @@ async function scoreCandidate(
   prefs: UserSnoozePreferences,
   context: SnoozeContext | undefined,
   userId: string,
-  timezone: string
+  timezone: string,
+  categoryPrefs?: { intensity: string; default_duration_minutes: number } | null
 ): Promise<number> {
   let score = 0;
 
@@ -246,6 +251,33 @@ async function scoreCandidate(
   // Bonus for not being adjusted: +5
   if (!candidate.adjusted) {
     score += 5;
+  }
+
+  // Category intensity adjustment
+  if (categoryPrefs) {
+    const hoursUntil =
+      (scheduledTime.getTime() - Date.now()) / (1000 * 60 * 60);
+    
+    if (categoryPrefs.intensity === "high") {
+      // High intensity: prefer shorter delays
+      if (hoursUntil <= 12) {
+        score += 10;
+      } else if (hoursUntil <= 24) {
+        score += 5;
+      } else {
+        score -= 5;
+      }
+    } else if (categoryPrefs.intensity === "low") {
+      // Low intensity: prefer longer delays
+      if (hoursUntil >= 24) {
+        score += 10;
+      } else if (hoursUntil >= 12) {
+        score += 5;
+      } else {
+        score -= 5;
+      }
+    }
+    // Medium intensity: no adjustment (balanced)
   }
 
   // Clamp score to 0-100
@@ -328,7 +360,9 @@ function formatTimeLabel(time: Date, timezone: string, prefix: string): string {
 export async function getRecommendedSnooze(
   userId: string,
   reminderId: string | undefined,
-  context?: SnoozeContext
+  context?: SnoozeContext,
+  contactId?: string | null,
+  message?: string
 ): Promise<{
   candidates: SnoozeCandidate[];
   context: SnoozeContext;
@@ -353,13 +387,23 @@ export async function getRecommendedSnooze(
       return null; // Return null to indicate basic snooze should be used
     }
 
+    // Determine category and get category preferences
+    const category = determineReminderCategory(contactId, message);
+    const categoryPrefs = await getCategorySnoozePreferences(userId, category);
+
+    // Check if category is enabled
+    if (categoryPrefs && !categoryPrefs.enabled) {
+      return null; // Category disabled
+    }
+
     // Generate candidates
     const candidates = await getSnoozeCandidates(
       userId,
       reminderId,
       context,
       prefs,
-      timezone
+      timezone,
+      categoryPrefs
     );
 
     // Score each candidate
@@ -371,7 +415,8 @@ export async function getRecommendedSnooze(
           prefs,
           context,
           userId,
-          timezone
+          timezone,
+          categoryPrefs
         ),
       }))
     );

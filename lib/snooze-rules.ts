@@ -18,6 +18,15 @@ export interface UserSnoozePreferences {
   };
   follow_up_cadence: "fast" | "balanced" | "light_touch";
   smart_suggestions_enabled: boolean;
+  cooldown_minutes: number; // Minimum minutes between reminders for same contact/entity
+  bundle_window_minutes: number; // Time window for bundling reminders (default: 5)
+  bundle_enabled: boolean; // Whether conflict resolution/bundling is enabled
+  bundle_format: "list" | "summary" | "combined"; // Format for bundled reminders
+  dnd_enabled: boolean; // Whether Do Not Disturb mode is enabled
+  dnd_override_rules: {
+    emergency_contacts: string[]; // Contact IDs that bypass DND
+    override_keywords: string[]; // Keywords in message that bypass DND
+  };
 }
 
 /**
@@ -279,6 +288,15 @@ export async function getUserSnoozePreferences(
       },
       follow_up_cadence: "balanced",
       smart_suggestions_enabled: true,
+      cooldown_minutes: 30,
+      bundle_window_minutes: 5,
+      bundle_enabled: true,
+      bundle_format: "list",
+      dnd_enabled: false,
+      dnd_override_rules: {
+        emergency_contacts: [],
+        override_keywords: [],
+      },
     })
     .select()
     .single();
@@ -302,6 +320,119 @@ export async function getUserSnoozePreferences(
       },
       follow_up_cadence: "balanced",
       smart_suggestions_enabled: true,
+      cooldown_minutes: 30,
+      bundle_window_minutes: 5,
+      bundle_enabled: true,
+      bundle_format: "list",
+      dnd_enabled: false,
+      dnd_override_rules: {
+        emergency_contacts: [],
+        override_keywords: [],
+      },
     }
   );
+}
+
+export type ReminderCategory = "follow_up" | "affirmation" | "generic";
+export type CategoryIntensity = "low" | "medium" | "high";
+
+export interface CategorySnoozePreferences {
+  category: ReminderCategory;
+  default_duration_minutes: number;
+  intensity: CategoryIntensity;
+  enabled: boolean;
+}
+
+/**
+ * Get category-specific snooze preferences
+ */
+export async function getCategorySnoozePreferences(
+  userId: string,
+  category: ReminderCategory
+): Promise<CategorySnoozePreferences | null> {
+  const supabase = createServiceClient();
+
+  const { data } = await supabase
+    .from("category_snooze_preferences")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("category", category)
+    .single();
+
+  if (data) {
+    return data as CategorySnoozePreferences;
+  }
+
+  // Return default if not found
+  return {
+    category,
+    default_duration_minutes: 30,
+    intensity: "medium",
+    enabled: true,
+  };
+}
+
+/**
+ * Get all category preferences for a user
+ */
+export async function getAllCategoryPreferences(
+  userId: string
+): Promise<CategorySnoozePreferences[]> {
+  const supabase = createServiceClient();
+
+  const { data } = await supabase
+    .from("category_snooze_preferences")
+    .select("*")
+    .eq("user_id", userId);
+
+  if (data && data.length > 0) {
+    return data as CategorySnoozePreferences[];
+  }
+
+  // Return defaults for all categories
+  return [
+    {
+      category: "follow_up",
+      default_duration_minutes: 30,
+      intensity: "medium",
+      enabled: true,
+    },
+    {
+      category: "affirmation",
+      default_duration_minutes: 30,
+      intensity: "medium",
+      enabled: true,
+    },
+    {
+      category: "generic",
+      default_duration_minutes: 30,
+      intensity: "medium",
+      enabled: true,
+    },
+  ];
+}
+
+/**
+ * Determine reminder category from reminder data
+ */
+export function determineReminderCategory(
+  contactId?: string | null,
+  message?: string
+): ReminderCategory {
+  if (contactId) {
+    return "follow_up";
+  }
+
+  if (message) {
+    const lowerMessage = message.toLowerCase();
+    if (
+      lowerMessage.includes("affirmation") ||
+      lowerMessage.includes("motivation") ||
+      lowerMessage.includes("inspire")
+    ) {
+      return "affirmation";
+    }
+  }
+
+  return "generic";
 }

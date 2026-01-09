@@ -69,6 +69,51 @@ export default function RemindersPage() {
     }
   }, [statusTab, statusTabs])
 
+  // Function to process overdue reminders
+  async function processOverdueReminders(reminderList: Reminder[]) {
+    const now = new Date()
+    const overdueReminders = reminderList.filter(
+      (reminder) => new Date(reminder.remind_at) < now && reminder.status === "pending"
+    )
+
+    if (overdueReminders.length === 0) {
+      return
+    }
+
+    try {
+      const response = await fetch("/api/reminders/process-overdue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reminder_ids: overdueReminders.map((r) => r.id),
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        console.error("Failed to process overdue reminders:", error)
+        return
+      }
+
+      const result = await response.json()
+      if (result.processed > 0) {
+        // Refresh reminders list to show updated statuses
+        const refreshResponse = await fetch("/api/reminders")
+        if (refreshResponse.ok) {
+          const refreshPayload = await refreshResponse.json()
+          const normalized: Reminder[] = (refreshPayload?.reminders ?? []).map((reminder: any) => ({
+            ...reminder,
+            remind_at: new Date(reminder.remind_at),
+            created_at: reminder.created_at ? new Date(reminder.created_at) : new Date(reminder.remind_at),
+          }))
+          setReminders(normalized)
+        }
+      }
+    } catch (error) {
+      console.error("Error processing overdue reminders:", error)
+    }
+  }
+
   // Check for tab query parameter on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -77,6 +122,31 @@ export default function RemindersPage() {
       setCategoryTab(tabParam as typeof categoryTab);
     }
   }, []);
+
+  // Periodic check for overdue reminders (every 60 seconds)
+  useEffect(() => {
+    if (!hasLoaded) return
+
+    // Only check if page is visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        processOverdueReminders(reminders)
+      }
+    }
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        processOverdueReminders(reminders)
+      }
+    }, 60000) // Check every 60 seconds
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [reminders, hasLoaded])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -100,6 +170,9 @@ export default function RemindersPage() {
 
         setReminders(normalized)
         setHasLoaded(true)
+
+        // Check for overdue reminders after loading
+        await processOverdueReminders(normalized)
 
       } catch (error: any) {
         if (error?.name === "AbortError") return

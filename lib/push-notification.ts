@@ -54,10 +54,14 @@ export async function sendPushNotification({
   try {
     // If VAPID keys are not configured, return early
     if (!vapidPublicKey || !vapidPrivateKey) {
-      console.log("Push notification skipped: VAPID keys not configured");
+      console.warn("[Push] Push notification skipped: VAPID keys not configured", {
+        userId,
+        hasPublicKey: !!vapidPublicKey,
+        hasPrivateKey: !!vapidPrivateKey,
+      });
       return {
         success: false,
-        message: "Push notifications not configured",
+        message: "Push notifications not configured - VAPID keys missing",
       };
     }
 
@@ -71,17 +75,23 @@ export async function sendPushNotification({
 
     if (error) {
       console.error("[Push] Error fetching push subscriptions:", {
-        error,
+        error: error.message || error,
+        errorCode: error.code,
         userId,
+        timestamp: new Date().toISOString(),
       });
       return {
         success: false,
-        message: `Failed to fetch subscriptions: ${error.message}`,
+        message: `Failed to fetch subscriptions: ${error.message || "Unknown error"}`,
       };
     }
 
     if (!subscriptions || subscriptions.length === 0) {
-      console.log("[Push] No push subscriptions found for user:", userId);
+      console.warn("[Push] No push subscriptions found for user:", {
+        userId,
+        timestamp: new Date().toISOString(),
+        suggestion: "User needs to enable push notifications in settings",
+      });
       return {
         success: false,
         message:
@@ -160,37 +170,56 @@ export async function sendPushNotification({
             console.log("[Push] Sending notification to:", {
               endpoint: subscription.endpoint.substring(0, 50) + "...",
               userId,
+              timestamp: new Date().toISOString(),
             });
 
             await webpush.sendNotification(pushSubscription, payload);
 
             console.log("[Push] Notification sent successfully:", {
               endpoint: subscription.endpoint.substring(0, 50) + "...",
+              userId,
+              timestamp: new Date().toISOString(),
             });
 
             return { success: true, endpoint: subscription.endpoint };
           } catch (error) {
+            const statusCode =
+              error && typeof error === "object" && "statusCode" in error
+                ? (error.statusCode as number)
+                : undefined;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            
             console.error("[Push] Error sending to subscription:", {
               endpoint: subscription.endpoint.substring(0, 50) + "...",
-              error: error instanceof Error ? error.message : String(error),
-              statusCode:
-                error && typeof error === "object" && "statusCode" in error
-                  ? error.statusCode
-                  : undefined,
+              userId,
+              error: errorMessage,
+              statusCode,
+              timestamp: new Date().toISOString(),
+              errorType: error instanceof Error ? error.constructor.name : typeof error,
             });
 
             // If subscription is invalid, remove it from database
-            if (error && typeof error === "object" && "statusCode" in error) {
-              const statusCode = error.statusCode as number;
-              if (statusCode === 410 || statusCode === 404) {
-                console.log(
-                  "[Push] Removing invalid subscription:",
-                  subscription.endpoint.substring(0, 50) + "..."
-                );
+            if (statusCode === 410 || statusCode === 404) {
+              console.warn(
+                "[Push] Removing invalid subscription (status " + statusCode + "):",
+                {
+                  endpoint: subscription.endpoint.substring(0, 50) + "...",
+                  userId,
+                  reason: statusCode === 410 ? "Gone" : "Not Found",
+                  timestamp: new Date().toISOString(),
+                }
+              );
+              try {
                 await supabase
                   .from("push_subscriptions")
                   .delete()
                   .eq("endpoint", subscription.endpoint);
+                console.log("[Push] Invalid subscription removed from database");
+              } catch (deleteError) {
+                console.error("[Push] Failed to remove invalid subscription:", {
+                  error: deleteError instanceof Error ? deleteError.message : String(deleteError),
+                  endpoint: subscription.endpoint.substring(0, 50) + "...",
+                });
               }
             }
             throw error;
@@ -206,10 +235,23 @@ export async function sendPushNotification({
 
     if (failed.length > 0) {
       console.error("[Push] Failed notifications:", {
+        userId,
         total,
         successful,
         failed: failed.length,
-        errors: failed.map((r) => (r.status === "rejected" ? r.reason : null)),
+        errors: failed.map((r) => {
+          if (r.status === "rejected") {
+            const reason = r.reason;
+            return {
+              message: reason instanceof Error ? reason.message : String(reason),
+              statusCode: reason && typeof reason === "object" && "statusCode" in reason
+                ? reason.statusCode
+                : undefined,
+            };
+          }
+          return null;
+        }),
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -218,6 +260,8 @@ export async function sendPushNotification({
       total,
       successful,
       failed: failed.length,
+      successRate: total > 0 ? `${((successful / total) * 100).toFixed(1)}%` : "0%",
+      timestamp: new Date().toISOString(),
     });
 
     return {
@@ -229,11 +273,20 @@ export async function sendPushNotification({
       results,
     };
   } catch (error) {
-    console.error("Error sending push notification:", error);
+    const errorMessage = error instanceof Error ? error.message : "Push notification failed";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error("[Push] Fatal error sending push notification:", {
+      userId,
+      error: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString(),
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
+    
     return {
       success: false,
-      message:
-        error instanceof Error ? error.message : "Push notification failed",
+      message: errorMessage,
     };
   }
 }

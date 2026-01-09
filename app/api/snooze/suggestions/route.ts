@@ -23,6 +23,23 @@ export async function GET(request: Request) {
     const reminderId = searchParams.get("reminder_id");
     const eventType = searchParams.get("event_type");
 
+    // Get reminder details if reminderId is provided
+    let contactId: string | null = null;
+    let message: string | undefined = undefined;
+    if (reminderId) {
+      const { createServiceClient } = await import("@/lib/supabase/service");
+      const serviceSupabase = createServiceClient();
+      const { data: reminder } = await serviceSupabase
+        .from("reminders")
+        .select("contact_id, message")
+        .eq("id", reminderId)
+        .single();
+      if (reminder) {
+        contactId = reminder.contact_id;
+        message = reminder.message;
+      }
+    }
+
     // Determine engagement signal from event type
     let engagementSignal:
       | "email_opened"
@@ -44,7 +61,9 @@ export async function GET(request: Request) {
         eventType: eventType || undefined,
         reminderId: reminderId || undefined,
         engagementSignal,
-      }
+      },
+      contactId,
+      message
     );
 
     if (!result) {

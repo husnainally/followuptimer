@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AffirmationBar } from "@/components/affirmation-bar";
 import { QuickAddReminder } from "@/components/quick-add-reminder";
+import { AffirmationAnalyticsUser } from "@/components/affirmation-analytics-user";
 import {
   DashboardCard,
   TrustIndicators,
@@ -315,6 +316,9 @@ export default function DashboardPage() {
 
       {/* Affirmation Bar */}
       <AffirmationBar />
+
+      {/* Affirmation Analytics */}
+      <AffirmationAnalyticsUser />
 
       {/* Quick Add Reminder Bar */}
       <QuickAddReminder onReminderCreated={fetchData} />

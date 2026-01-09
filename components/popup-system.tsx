@@ -33,8 +33,8 @@ export function PopupSystem() {
 
   useEffect(() => {
     fetchNextPopup();
-    // Poll for new popups every 30 seconds
-    const interval = setInterval(fetchNextPopup, 30000);
+    // Poll for new popups every 8 seconds for better responsiveness
+    const interval = setInterval(fetchNextPopup, 8000);
     return () => clearInterval(interval);
   }, []);
 

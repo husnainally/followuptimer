@@ -34,6 +34,7 @@ const snoozeSettingsSchema = z.object({
     .regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/)
     .nullable(),
   maxRemindersPerDay: z.number().min(1).max(100),
+  cooldownMinutes: z.number().min(0).max(1440), // 0-24 hours
   allowWeekends: z.boolean(),
   laterToday: z.boolean(),
   tomorrowMorning: z.boolean(),
@@ -57,6 +58,361 @@ const dayLabels = [
   { value: 6, label: "Saturday" },
 ];
 
+// DND Override Component
+function DNDOverrideSection() {
+  const [dndEnabled, setDndEnabled] = useState(false);
+  const [emergencyContacts, setEmergencyContacts] = useState<string[]>([]);
+  const [overrideKeywords, setOverrideKeywords] = useState<string[]>([]);
+  const [contacts, setContacts] = useState<Array<{ id: string; name: string }>>([]);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadDNDSettings();
+    loadContacts();
+  }, []);
+
+  async function loadDNDSettings() {
+    try {
+      const response = await fetch("/api/snooze/preferences");
+      if (response.ok) {
+        const data = await response.json();
+        if (data.preferences) {
+          setDndEnabled(data.preferences.dnd_enabled || false);
+          setEmergencyContacts(
+            data.preferences.dnd_override_rules?.emergency_contacts || []
+          );
+          setOverrideKeywords(
+            data.preferences.dnd_override_rules?.override_keywords || []
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load DND settings:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadContacts() {
+    try {
+      const response = await fetch("/api/contacts");
+      if (response.ok) {
+        const data = await response.json();
+        setContacts(data.contacts || []);
+      }
+    } catch (error) {
+      console.error("Failed to load contacts:", error);
+    }
+  }
+
+  async function updateDNDSettings() {
+    try {
+      const response = await fetch("/api/snooze/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dnd_enabled: dndEnabled,
+          dnd_override_rules: {
+            emergency_contacts: emergencyContacts,
+            override_keywords: overrideKeywords,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        toast.success("DND settings updated");
+      } else {
+        toast.error("Failed to update DND settings");
+      }
+    } catch (error) {
+      console.error("Failed to update DND settings:", error);
+      toast.error("Failed to update DND settings");
+    }
+  }
+
+  function handleToggleDND() {
+    const newValue = !dndEnabled;
+    setDndEnabled(newValue);
+    updateDNDSettings();
+  }
+
+  function handleToggleEmergencyContact(contactId: string) {
+    const newContacts = emergencyContacts.includes(contactId)
+      ? emergencyContacts.filter((id) => id !== contactId)
+      : [...emergencyContacts, contactId];
+    setEmergencyContacts(newContacts);
+    updateDNDSettings();
+  }
+
+  function handleAddKeyword() {
+    if (newKeyword.trim() && !overrideKeywords.includes(newKeyword.trim())) {
+      const newKeywords = [...overrideKeywords, newKeyword.trim()];
+      setOverrideKeywords(newKeywords);
+      setNewKeyword("");
+      updateDNDSettings();
+    }
+  }
+
+  function handleRemoveKeyword(keyword: string) {
+    const newKeywords = overrideKeywords.filter((k) => k !== keyword);
+    setOverrideKeywords(newKeywords);
+    updateDNDSettings();
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4 border-b pb-6">
+        <Skeleton className="h-20 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 border-b pb-6">
+      <Label className="text-base font-semibold">Do Not Disturb (DND)</Label>
+      <p className="text-sm text-muted-foreground">
+        Block all reminders except emergency contacts and keywords (separate from quiet hours)
+      </p>
+
+      <div className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={dndEnabled}
+          onChange={handleToggleDND}
+          className="h-4 w-4 rounded border-gray-300"
+        />
+        <Label className="cursor-pointer">
+          {dndEnabled ? "DND Enabled" : "DND Disabled"}
+        </Label>
+      </div>
+
+      {dndEnabled && (
+        <div className="space-y-4 mt-4 border rounded-lg p-4 bg-muted/30">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Emergency Contacts</Label>
+            <p className="text-xs text-muted-foreground">
+              These contacts can bypass DND
+            </p>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {contacts.map((contact) => (
+                <div key={contact.id} className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={emergencyContacts.includes(contact.id)}
+                    onChange={() => handleToggleEmergencyContact(contact.id)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label className="text-sm cursor-pointer">{contact.name}</Label>
+                </div>
+              ))}
+              {contacts.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No contacts available
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Override Keywords</Label>
+            <p className="text-xs text-muted-foreground">
+              Reminders containing these words bypass DND
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newKeyword}
+                onChange={(e) => setNewKeyword(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleAddKeyword()}
+                placeholder="Add keyword"
+                className="flex h-10 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddKeyword}
+                disabled={!newKeyword.trim()}
+              >
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {overrideKeywords.map((keyword) => (
+                <div
+                  key={keyword}
+                  className="flex items-center gap-1 bg-background border rounded px-2 py-1 text-sm"
+                >
+                  <span>{keyword}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveKeyword(keyword)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Category Preferences Component
+function CategoryPreferencesSection() {
+  const [categoryPrefs, setCategoryPrefs] = useState<
+    Array<{
+      category: string;
+      default_duration_minutes: number;
+      intensity: string;
+      enabled: boolean;
+    }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadCategoryPreferences();
+  }, []);
+
+  async function loadCategoryPreferences() {
+    try {
+      const response = await fetch("/api/snooze/preferences/category");
+      if (response.ok) {
+        const data = await response.json();
+        if (data.preferences) {
+          setCategoryPrefs(data.preferences);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load category preferences:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateCategoryPreference(
+    category: string,
+    field: string,
+    value: unknown
+  ) {
+    try {
+      const response = await fetch("/api/snooze/preferences/category", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category,
+          [field]: value,
+        }),
+      });
+
+      if (response.ok) {
+        await loadCategoryPreferences();
+        toast.success("Category preference updated");
+      } else {
+        toast.error("Failed to update preference");
+      }
+    } catch (error) {
+      console.error("Failed to update category preference:", error);
+      toast.error("Failed to update preference");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4 border-b pb-6">
+        <Skeleton className="h-20 w-full" />
+      </div>
+    );
+  }
+
+  const categories = [
+    { key: "follow_up", label: "Follow-ups", description: "Reminders for contacts" },
+    { key: "affirmation", label: "Affirmations", description: "Motivational reminders" },
+    { key: "generic", label: "Generic", description: "Other reminders" },
+  ];
+
+  return (
+    <div className="space-y-4 border-b pb-6">
+      <Label className="text-base font-semibold">Category Preferences</Label>
+      <p className="text-sm text-muted-foreground">
+        Configure snooze behavior for different reminder types
+      </p>
+
+      <div className="space-y-4">
+        {categories.map((cat) => {
+          const pref = categoryPrefs.find((p) => p.category === cat.key);
+          if (!pref) return null;
+
+          return (
+            <div
+              key={cat.key}
+              className="border rounded-lg p-4 space-y-3 bg-muted/30"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="font-medium">{cat.label}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {cat.description}
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={pref.enabled}
+                    onChange={(e) =>
+                      updateCategoryPreference(cat.key, "enabled", e.target.checked)
+                    }
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label className="text-sm">Enabled</Label>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-sm">Default Duration (minutes)</Label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1440}
+                    value={pref.default_duration_minutes}
+                    onChange={(e) =>
+                      updateCategoryPreference(
+                        cat.key,
+                        "default_duration_minutes",
+                        parseInt(e.target.value) || 30
+                      )
+                    }
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Intensity</Label>
+                  <select
+                    value={pref.intensity}
+                    onChange={(e) =>
+                      updateCategoryPreference(cat.key, "intensity", e.target.value)
+                    }
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="low">Low (Conservative)</option>
+                    <option value="medium">Medium (Balanced)</option>
+                    <option value="high">High (Aggressive)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function SnoozeSettings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -70,6 +426,7 @@ export function SnoozeSettings() {
       quietHoursStart: null,
       quietHoursEnd: null,
       maxRemindersPerDay: 10,
+      cooldownMinutes: 30,
       allowWeekends: false,
       laterToday: true,
       tomorrowMorning: true,
@@ -108,6 +465,7 @@ export function SnoozeSettings() {
               quietHoursStart: prefs.quiet_hours_start?.slice(0, 5) || null,
               quietHoursEnd: prefs.quiet_hours_end?.slice(0, 5) || null,
               maxRemindersPerDay: prefs.max_reminders_per_day || 10,
+              cooldownMinutes: prefs.cooldown_minutes || 30,
               allowWeekends: prefs.allow_weekends ?? false,
               laterToday: prefs.default_snooze_options?.later_today ?? true,
               tomorrowMorning:
@@ -150,6 +508,7 @@ export function SnoozeSettings() {
             ? `${data.quietHoursEnd}:00`
             : null,
           max_reminders_per_day: data.maxRemindersPerDay,
+          cooldown_minutes: data.cooldownMinutes,
           allow_weekends: data.allowWeekends,
           default_snooze_options: {
             later_today: data.laterToday,
@@ -377,6 +736,32 @@ export function SnoozeSettings() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="cooldownMinutes">Cooldown Period (Minutes)</Label>
+                  <FormField
+                    control={form.control}
+                    name="cooldownMinutes"
+                    render={({ field }) => (
+                      <>
+                        <input
+                          id="cooldownMinutes"
+                          type="number"
+                          min={0}
+                          max={1440}
+                          value={field.value}
+                          onChange={(e) =>
+                            field.onChange(parseInt(e.target.value) || 0)
+                          }
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Minimum minutes between reminders for the same contact (0 = disabled, default: 30)
+                        </p>
+                      </>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label className="text-base font-semibold">
                     Weekend Behavior
                   </Label>
@@ -554,6 +939,12 @@ export function SnoozeSettings() {
                 )}
               />
             </div>
+
+            {/* DND Override */}
+            <DNDOverrideSection />
+
+            {/* Category-Level Settings */}
+            <CategoryPreferencesSection />
 
             {/* Follow-up Cadence */}
             <div className="space-y-4 border-b pb-6">
