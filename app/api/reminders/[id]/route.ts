@@ -145,7 +145,16 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { message, remind_at, tone, notification_method, status } = body;
+    const { 
+      message, 
+      remind_at, 
+      tone, 
+      notification_method, 
+      status,
+      linked_entities,
+      last_interaction_at,
+      completion_context
+    } = body;
 
     const updates: any = {};
     if (message !== undefined) updates.message = message;
@@ -154,6 +163,24 @@ export async function PATCH(
     if (notification_method !== undefined)
       updates.notification_method = notification_method;
     if (status !== undefined) updates.status = status;
+    
+    // Handle new fields
+    if (linked_entities !== undefined) {
+      if (Array.isArray(linked_entities)) {
+        updates.linked_entities = linked_entities.length > 0 ? linked_entities : null;
+      } else if (typeof linked_entities === "string") {
+        try {
+          const parsed = JSON.parse(linked_entities);
+          updates.linked_entities = Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+        } catch {
+          updates.linked_entities = null;
+        }
+      } else {
+        updates.linked_entities = null;
+      }
+    }
+    if (last_interaction_at !== undefined) updates.last_interaction_at = last_interaction_at || null;
+    if (completion_context !== undefined) updates.completion_context = completion_context?.trim() || null;
 
     const { data: reminder, error } = await supabase
       .from("reminders")

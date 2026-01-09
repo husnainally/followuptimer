@@ -141,10 +141,36 @@ export async function POST(
       (normalizedAction === "MARK_DONE" || normalizedAction === "COMPLETE") &&
       popup.reminder_id
     ) {
+      // Get reminder to check for contact_id
+      const { data: reminder } = await supabase
+        .from("reminders")
+        .select("contact_id")
+        .eq("id", popup.reminder_id)
+        .single();
+
+      const now = new Date().toISOString();
+      const updateData: any = { status: "sent" };
+      
+      // If reminder has a contact, update last_interaction_at
+      if (reminder?.contact_id) {
+        updateData.last_interaction_at = now;
+        
+        // Update contact's updated_at as well
+        await supabase
+          .from("contacts")
+          .update({ updated_at: now })
+          .eq("id", reminder.contact_id);
+      }
+      
+      // Set completion_context if provided in action_data
+      if (action_data?.completion_context) {
+        updateData.completion_context = String(action_data.completion_context).trim();
+      }
+      
       // Mark reminder as completed
       await supabase
         .from("reminders")
-        .update({ status: "sent" })
+        .update(updateData)
         .eq("id", popup.reminder_id);
 
       await logEvent({
@@ -159,12 +185,7 @@ export async function POST(
         useServiceClient: true,
       });
 
-      // Log reminder_completed event
-      const { data: reminder } = await supabase
-        .from("reminders")
-        .select("contact_id")
-        .eq("id", popup.reminder_id)
-        .single();
+      // Reminder already fetched above, reuse it
 
       const eventResult = await logEvent({
         userId: user.id,

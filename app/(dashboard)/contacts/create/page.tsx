@@ -14,7 +14,11 @@ export default function CreateContactPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
+    first_name: "",
+    last_name: "",
+    company: "",
+    job_title: "",
+    tags: "",
     email: "",
     phone: "",
     notes: "",
@@ -30,10 +34,15 @@ export default function CreateContactPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: formData.name.trim(),
+          first_name: formData.first_name.trim() || null,
+          last_name: formData.last_name.trim() || null,
+          company: formData.company.trim() || null,
+          job_title: formData.job_title.trim() || null,
+          tags: formData.tags.trim() ? formData.tags.split(",").map(t => t.trim()).filter(t => t) : null,
           email: formData.email.trim() || null,
           phone: formData.phone.trim() || null,
           notes: formData.notes.trim() || null,
+          source: "manual",
         }),
       });
 
@@ -74,21 +83,33 @@ export default function CreateContactPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">
-                Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Contact name"
-                required
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="first_name">
+                  First Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="first_name"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  placeholder="John"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="last_name">Last Name</Label>
+                <Input
+                  id="last_name"
+                  value={formData.last_name}
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  placeholder="Doe"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">
+                Email <span className="text-muted-foreground text-xs">(required if no first name)</span>
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -96,6 +117,40 @@ export default function CreateContactPage() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="email@example.com"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="company">Company</Label>
+                <Input
+                  id="company"
+                  value={formData.company}
+                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                  placeholder="Acme Inc."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="job_title">Job Title</Label>
+                <Input
+                  id="job_title"
+                  value={formData.job_title}
+                  onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+                  placeholder="Software Engineer"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tags">Tags</Label>
+              <Input
+                id="tags"
+                value={formData.tags}
+                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                placeholder="client, important, follow-up (comma-separated)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Separate multiple tags with commas
+              </p>
             </div>
 
             <div className="space-y-2">

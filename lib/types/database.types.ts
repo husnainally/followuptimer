@@ -111,32 +111,53 @@ export type Database = {
       }
       contacts: {
         Row: {
+          archived_at: string | null
+          company: string | null
           created_at: string
           email: string | null
+          first_name: string | null
           id: string
+          job_title: string | null
+          last_name: string | null
           name: string
           notes: string | null
           phone: string | null
+          source: string
+          tags: string[] | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
+          company?: string | null
           created_at?: string
           email?: string | null
+          first_name?: string | null
           id?: string
+          job_title?: string | null
+          last_name?: string | null
           name: string
           notes?: string | null
           phone?: string | null
+          source?: string
+          tags?: string[] | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          archived_at?: string | null
+          company?: string | null
           created_at?: string
           email?: string | null
+          first_name?: string | null
           id?: string
+          job_title?: string | null
+          last_name?: string | null
           name?: string
           notes?: string | null
           phone?: string | null
+          source?: string
+          tags?: string[] | null
           updated_at?: string
           user_id?: string
         }
@@ -599,9 +620,12 @@ export type Database = {
       reminders: {
         Row: {
           affirmation_enabled: boolean | null
+          completion_context: string | null
           contact_id: string | null
           created_at: string
           id: string
+          last_interaction_at: string | null
+          linked_entities: Json | null
           message: string
           notification_method: Database["public"]["Enums"]["notification_method"]
           qstash_message_id: string | null
@@ -613,9 +637,12 @@ export type Database = {
         }
         Insert: {
           affirmation_enabled?: boolean | null
+          completion_context?: string | null
           contact_id?: string | null
           created_at?: string
           id?: string
+          last_interaction_at?: string | null
+          linked_entities?: Json | null
           message: string
           notification_method?: Database["public"]["Enums"]["notification_method"]
           qstash_message_id?: string | null
@@ -627,9 +654,12 @@ export type Database = {
         }
         Update: {
           affirmation_enabled?: boolean | null
+          completion_context?: string | null
           contact_id?: string | null
           created_at?: string
           id?: string
+          last_interaction_at?: string | null
+          linked_entities?: Json | null
           message?: string
           notification_method?: Database["public"]["Enums"]["notification_method"]
           qstash_message_id?: string | null

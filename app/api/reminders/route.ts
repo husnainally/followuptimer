@@ -50,7 +50,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { message, remind_at, tone, notification_method, affirmation_enabled, contact_id } = body;
+    const { 
+      message, 
+      remind_at, 
+      tone, 
+      notification_method, 
+      affirmation_enabled, 
+      contact_id,
+      linked_entities,
+      last_interaction_at,
+      completion_context
+    } = body;
 
     // Validate required fields
     if (!message || !remind_at) {
@@ -58,6 +68,20 @@ export async function POST(request: Request) {
         { error: "Message and remind_at are required" },
         { status: 400 }
       );
+    }
+
+    // Normalize linked_entities: ensure it's a valid JSON array
+    let linkedEntitiesArray: unknown[] = [];
+    if (linked_entities !== undefined) {
+      if (Array.isArray(linked_entities)) {
+        linkedEntitiesArray = linked_entities;
+      } else if (typeof linked_entities === "string") {
+        try {
+          linkedEntitiesArray = JSON.parse(linked_entities);
+        } catch {
+          linkedEntitiesArray = [];
+        }
+      }
     }
 
     const { data: reminder, error } = await supabase
@@ -71,6 +95,9 @@ export async function POST(request: Request) {
         status: "pending",
         affirmation_enabled: affirmation_enabled !== undefined ? affirmation_enabled : true,
         contact_id: contact_id || null,
+        linked_entities: linkedEntitiesArray.length > 0 ? linkedEntitiesArray : null,
+        last_interaction_at: last_interaction_at || null,
+        completion_context: completion_context?.trim() || null,
       })
       .select()
       .single();

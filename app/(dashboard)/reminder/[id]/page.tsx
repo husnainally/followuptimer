@@ -17,7 +17,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Form } from "@/components/ui/form";
 import { reminderSchema, type ReminderFormData } from "@/lib/schemas";
-import { Calendar as CalendarIcon, Trash2, AlertCircle, User, StickyNote } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  Trash2,
+  AlertCircle,
+  User,
+  StickyNote,
+  Repeat,
+} from "lucide-react";
 import { ControlledTextarea } from "@/components/controlled-textarea";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,6 +70,7 @@ export default function ReminderDetailPage() {
   const [addNoteDialogOpen, setAddNoteDialogOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
+  const [isCreatingFollowup, setIsCreatingFollowup] = useState(false);
 
   const form = useForm<ReminderFormData>({
     resolver: zodResolver(reminderSchema),
@@ -151,7 +159,9 @@ export default function ReminderDetailPage() {
       // Fetch suppression details if status is suppressed
       if (reminder?.status === "suppressed" || reminder?.status === "pending") {
         try {
-          const auditResponse = await fetch(`/api/reminders/${reminderId}/audit`);
+          const auditResponse = await fetch(
+            `/api/reminders/${reminderId}/audit`
+          );
           if (auditResponse.ok) {
             const auditData = await auditResponse.json();
             setSuppressionDetails(auditData.suppressionDetails);
@@ -341,6 +351,44 @@ export default function ReminderDetailPage() {
     }
   };
 
+  const handleCreateFollowup = async () => {
+    if (!reminderId || !contactId) return;
+
+    setIsCreatingFollowup(true);
+    const toastId = toast.loading("Creating follow-up reminder...");
+
+    try {
+      const response = await fetch("/api/reminders/create-followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          original_reminder_id: reminderId,
+          contact_id: contactId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.error || "Failed to create follow-up");
+      }
+
+      const data = await response.json();
+      toast.success("Follow-up reminder created successfully", { id: toastId });
+
+      // Navigate to the new reminder
+      if (data.reminder?.id) {
+        router.push(`/reminder/${data.reminder.id}`);
+        router.refresh();
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to create follow-up", {
+        id: toastId,
+      });
+    } finally {
+      setIsCreatingFollowup(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Header with Back Button */}
@@ -497,7 +545,10 @@ export default function ReminderDetailPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <Link href={`/contacts/${contactId}`}>
-                  <Button variant="outline" className="w-full justify-start gap-2">
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                  >
                     <User className="w-4 h-4" />
                     View Contact: {contactName || "Contact"}
                   </Button>
@@ -510,6 +561,19 @@ export default function ReminderDetailPage() {
                   <StickyNote className="w-4 h-4" />
                   Add Note
                 </Button>
+                {meta?.status === "sent" && (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                    onClick={handleCreateFollowup}
+                    disabled={isCreatingFollowup}
+                  >
+                    <Repeat className="w-4 h-4" />
+                    {isCreatingFollowup
+                      ? "Creating..."
+                      : "Create Next Follow-up"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}
@@ -546,10 +610,14 @@ export default function ReminderDetailPage() {
                   variant="outline"
                   className={cn(
                     "mt-2 capitalize border-border/60",
-                    statusDisplay === "completed" && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                    statusDisplay === "suppressed" && "bg-amber-50 text-amber-700 border-amber-200",
-                    statusDisplay === "snoozed" && "bg-blue-50 text-blue-700 border-blue-200",
-                    statusDisplay === "pending" && "bg-primary/10 text-primary border-primary/20"
+                    statusDisplay === "completed" &&
+                      "bg-emerald-50 text-emerald-700 border-emerald-200",
+                    statusDisplay === "suppressed" &&
+                      "bg-amber-50 text-amber-700 border-amber-200",
+                    statusDisplay === "snoozed" &&
+                      "bg-blue-50 text-blue-700 border-blue-200",
+                    statusDisplay === "pending" &&
+                      "bg-primary/10 text-primary border-primary/20"
                   )}
                 >
                   {statusDisplay}
@@ -628,7 +696,8 @@ export default function ReminderDetailPage() {
           <DialogHeader>
             <DialogTitle>Add Note to Contact</DialogTitle>
             <DialogDescription>
-              Add a note to {contactName || "this contact"}. This will be appended to the contact's notes.
+              Add a note to {contactName || "this contact"}. This will be
+              appended to the contact's notes.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -661,14 +730,17 @@ export default function ReminderDetailPage() {
                 setIsAddingNote(true);
                 try {
                   // Use the notes API endpoint for proper history tracking
-                  const response = await fetch(`/api/contacts/${contactId}/notes`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      note_text: noteText.trim(),
-                      reminder_id: reminderId || null,
-                    }),
-                  });
+                  const response = await fetch(
+                    `/api/contacts/${contactId}/notes`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        note_text: noteText.trim(),
+                        reminder_id: reminderId || null,
+                      }),
+                    }
+                  );
 
                   if (!response.ok) {
                     const error = await response.json().catch(() => ({}));
