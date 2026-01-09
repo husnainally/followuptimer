@@ -47,6 +47,9 @@ interface DashboardStats {
     nextDigestTime: string | null;
     enabled: boolean;
   };
+  preferences?: {
+    overdueHandling?: "gentle_nudge" | "escalation" | "none";
+  };
 }
 
 export default function DashboardPage() {
@@ -276,7 +279,15 @@ export default function DashboardPage() {
           description="Past due date"
           icon={AlertTriangle}
           href="/reminder"
-          variant={stats?.overdue.count ? "warning" : "default"}
+          variant={
+            stats?.preferences?.overdueHandling === "none"
+              ? "default"
+              : stats?.preferences?.overdueHandling === "escalation" && stats?.overdue.count
+              ? "warning"
+              : stats?.overdue.count
+              ? "warning"
+              : "default"
+          }
         />
         <DashboardCard
           title="At Risk"
@@ -356,6 +367,7 @@ export default function DashboardPage() {
             <RemindersTable
               reminders={reminders}
               onReminderDeleted={fetchData}
+              overdueHandling={stats?.preferences?.overdueHandling || "gentle_nudge"}
             />
           )}
         </CardContent>

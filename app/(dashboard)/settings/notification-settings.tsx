@@ -21,6 +21,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const notificationSettingsSchema = z.object({
   // Channel controls
@@ -413,6 +414,23 @@ export function NotificationSettings() {
                   description="Notifications for general reminders"
                 />
               </div>
+            </div>
+
+            <div className="space-y-4 border-t pt-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="space-y-2">
+                    <p className="font-medium">About Quiet Hours & Digests</p>
+                    <p className="text-sm">
+                      <strong>Reminder Quiet Hours:</strong> Reminders are suppressed during your quiet hours (configured in Snooze settings). This prevents notifications from interrupting your rest time.
+                    </p>
+                    <p className="text-sm">
+                      <strong>Weekly Digests:</strong> Digests ignore quiet hours and are sent at your scheduled time. This is because digests are informational summaries, not active reminders that need immediate attention.
+                    </p>
+                  </div>
+                </AlertDescription>
+              </Alert>
             </div>
 
             <ControlledSwitch

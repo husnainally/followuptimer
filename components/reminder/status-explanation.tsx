@@ -14,6 +14,7 @@ interface StatusExplanationProps {
   remindAt: Date;
   suppressionDetails?: SuppressionDetail | null;
   snoozedUntil?: Date | null;
+  suppressionTransparency?: "proactive" | "on_open";
 }
 
 export function StatusExplanation({
@@ -21,8 +22,11 @@ export function StatusExplanation({
   remindAt,
   suppressionDetails,
   snoozedUntil,
+  suppressionTransparency = "proactive",
 }: StatusExplanationProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  // For "on_open" mode, start collapsed; for "proactive" mode, start expanded
+  const shouldStartExpanded = suppressionTransparency === "proactive" && status === "suppressed";
+  const [isExpanded, setIsExpanded] = useState(shouldStartExpanded);
 
   const getStatusExplanation = () => {
     if (status === "suppressed" && suppressionDetails) {
@@ -118,6 +122,10 @@ export function StatusExplanation({
 
   const detailsId = `status-details-${status}`;
   const buttonId = `status-toggle-${status}`;
+  
+  // For suppressed reminders in "on_open" mode, show collapsed with hint
+  const isSuppressedOnOpen = status === "suppressed" && suppressionTransparency === "on_open";
+  const showMessage = isExpanded || !isSuppressedOnOpen;
 
   return (
     <Card className="bg-muted/20 border-border/70">
@@ -127,32 +135,40 @@ export function StatusExplanation({
             <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <CardTitle className="text-sm font-medium">What's happening?</CardTitle>
           </div>
-          <Button
-            id={buttonId}
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="h-8 w-8 p-0"
-            aria-label={isExpanded ? "Collapse details" : "Expand details"}
-            aria-expanded={isExpanded}
-            aria-controls={explanation.details.length > 0 ? detailsId : undefined}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setIsExpanded(!isExpanded);
-              }
-            }}
-          >
-            {isExpanded ? (
-              <ChevronUp className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <ChevronDown className="h-4 w-4" aria-hidden="true" />
-            )}
-          </Button>
+          {explanation.details.length > 0 && (
+            <Button
+              id={buttonId}
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="h-8 w-8 p-0"
+              aria-label={isExpanded ? "Collapse details" : "Expand details"}
+              aria-expanded={isExpanded}
+              aria-controls={detailsId}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setIsExpanded(!isExpanded);
+                }
+              }}
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <p className="text-sm text-foreground mb-3">{explanation.message}</p>
+        {showMessage ? (
+          <p className="text-sm text-foreground mb-3">{explanation.message}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground mb-3">
+            Click to see why this reminder was suppressed.
+          </p>
+        )}
         {isExpanded && explanation.details.length > 0 && (
           <div
             id={detailsId}

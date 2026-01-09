@@ -71,6 +71,7 @@ export default function ReminderDetailPage() {
   const [noteText, setNoteText] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isCreatingFollowup, setIsCreatingFollowup] = useState(false);
+  const [suppressionTransparency, setSuppressionTransparency] = useState<"proactive" | "on_open">("proactive");
 
   const form = useForm<ReminderFormData>({
     resolver: zodResolver(reminderSchema),
@@ -170,6 +171,20 @@ export default function ReminderDetailPage() {
           // Fail silently - suppression details are optional
           console.error("Failed to fetch suppression details:", err);
         }
+      }
+
+      // Fetch user preferences for suppression transparency
+      try {
+        const prefsResponse = await fetch("/api/preferences");
+        if (prefsResponse.ok) {
+          const prefsData = await prefsResponse.json();
+          if (prefsData.preferences?.suppression_transparency) {
+            setSuppressionTransparency(prefsData.preferences.suppression_transparency);
+          }
+        }
+      } catch (err) {
+        // Fail silently - use default (proactive)
+        console.error("Failed to fetch suppression transparency preference:", err);
       }
     } catch (error: any) {
       const message = error?.message || "Failed to load reminder";
@@ -641,6 +656,7 @@ export default function ReminderDetailPage() {
               remindAt={form.watch("remind_at")}
               suppressionDetails={suppressionDetails}
               snoozedUntil={meta.snoozed_until}
+              suppressionTransparency={suppressionTransparency}
             />
           )}
 

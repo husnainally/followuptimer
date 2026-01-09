@@ -147,6 +147,15 @@ export async function GET() {
 
     const failedCount = failedReminders?.length || 0;
 
+    // Fetch user preferences for overdue handling
+    const { data: userPrefs } = await supabase
+      .from("user_preferences")
+      .select("overdue_handling")
+      .eq("user_id", user.id)
+      .single();
+
+    const overdueHandling = (userPrefs?.overdue_handling as "gentle_nudge" | "escalation" | "none") || "gentle_nudge";
+
     return NextResponse.json({
       today: {
         count: todayReminders.length,
@@ -173,6 +182,9 @@ export async function GET() {
       digest: {
         nextDigestTime,
         enabled: digestPrefs?.weekly_digest_enabled || false,
+      },
+      preferences: {
+        overdueHandling,
       },
     });
   } catch (error: unknown) {

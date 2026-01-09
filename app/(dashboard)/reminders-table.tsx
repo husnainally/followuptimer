@@ -50,6 +50,7 @@ type RemindersTableProps = {
   onReminderClick?: (reminder: Reminder) => void;
   onReminderDeleted?: () => void;
   isLoading?: boolean;
+  overdueHandling?: "gentle_nudge" | "escalation" | "none";
 };
 
 const truncateMessage = (message?: string, length = 35) => {
@@ -76,6 +77,7 @@ export function RemindersTable({
   onReminderClick,
   onReminderDeleted,
   isLoading = false,
+  overdueHandling = "gentle_nudge",
 }: RemindersTableProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState<Reminder | null>(
@@ -267,41 +269,61 @@ export function RemindersTable({
               </TableCell>
             </TableRow>
           ) : (
-            reminders.map((reminder) => (
-              <TableRow
-                key={reminder.id}
-                className={cn(
-                  'hover:bg-muted/50',
-                  onReminderClick && 'cursor-pointer'
-                )}
-                onClick={() => onReminderClick?.(reminder)}
-              >
-                <TableCell className='font-medium'>
-                  {truncateMessage(reminder.message)}
-                </TableCell>
-                <TableCell className='text-sm'>
-                  {formatDate(reminder.remind_at)}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    className={cn(
-                      "capitalize border-0 px-3 py-1 text-xs font-medium",
-                      toneBadgeClassMap[reminder.tone] ?? "bg-muted/60 text-foreground"
-                    )}
-                  >
-                    {reminder.tone}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    className={cn(
-                      "capitalize border-0 px-3 py-1 text-xs font-medium",
-                      statusBadgeClassMap[reminder.status] ?? "bg-muted/60 text-foreground"
-                    )}
-                  >
-                    {reminder.status}
-                  </Badge>
-                </TableCell>
+            reminders.map((reminder) => {
+              // Check if reminder is overdue
+              const now = new Date();
+              const remindAt = new Date(reminder.remind_at);
+              const isOverdue = remindAt < now && reminder.status === "pending";
+              
+              // Apply overdue handling styling
+              const getOverdueStyling = () => {
+                if (!isOverdue || overdueHandling === "none") {
+                  return "";
+                }
+                if (overdueHandling === "escalation") {
+                  return "bg-amber-50 border-l-4 border-l-amber-500";
+                }
+                // gentle_nudge - subtle indicator
+                return "bg-amber-50/30";
+              };
+
+              return (
+                <TableRow
+                  key={reminder.id}
+                  className={cn(
+                    'hover:bg-muted/50',
+                    onReminderClick && 'cursor-pointer',
+                    getOverdueStyling()
+                  )}
+                  onClick={() => onReminderClick?.(reminder)}
+                >
+                  <TableCell className='font-medium'>
+                    {truncateMessage(reminder.message)}
+                  </TableCell>
+                  <TableCell className='text-sm'>
+                    {formatDate(reminder.remind_at)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      className={cn(
+                        "capitalize border-0 px-3 py-1 text-xs font-medium",
+                        toneBadgeClassMap[reminder.tone] ?? "bg-muted/60 text-foreground"
+                      )}
+                    >
+                      {reminder.tone}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      className={cn(
+                        "capitalize border-0 px-3 py-1 text-xs font-medium",
+                        statusBadgeClassMap[reminder.status] ?? "bg-muted/60 text-foreground",
+                        isOverdue && overdueHandling === "escalation" && "bg-amber-600 text-white border-amber-700"
+                      )}
+                    >
+                      {reminder.status}
+                    </Badge>
+                  </TableCell>
                 <TableCell className='text-right'>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -335,7 +357,8 @@ export function RemindersTable({
                   </DropdownMenu>
                 </TableCell>
               </TableRow>
-            ))
+              );
+            })
           )}
         </TableBody>
       </Table>
