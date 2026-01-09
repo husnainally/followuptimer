@@ -9,8 +9,10 @@ import { logError, logInfo } from "@/lib/logger";
 import {
   checkReminderSuppression,
   logReminderSuppression,
+  recordCooldownTracking,
 } from "@/lib/reminder-suppression";
 import { getUserPreferences } from "@/lib/user-preferences";
+import { checkAndHandleConflicts, deliverBundle } from "@/lib/reminder-conflict-resolution";
 
 // Route segment config
 export const dynamic = "force-dynamic";
@@ -74,6 +76,47 @@ async function handler(request: Request) {
       contactId: reminder.contact_id || undefined,
       useServiceClient: true,
     });
+
+    // Check for conflicts and handle bundling
+    const conflictCheck = await checkAndHandleConflicts(
+      reminder.user_id,
+      reminderId,
+      scheduledTime
+    );
+
+    // If reminder should be bundled, check if bundle should be delivered
+    if (conflictCheck.shouldBundle && conflictCheck.bundleId) {
+      // Check if this is the first reminder in the bundle to trigger delivery
+      // (We deliver when the bundle time is reached)
+      const bundleTime = new Date(scheduledTime);
+      const now = new Date();
+      
+      // If bundle time has been reached, deliver the bundle
+      if (now >= bundleTime) {
+        const bundleDelivered = await deliverBundle(
+          conflictCheck.bundleId,
+          reminder.user_id
+        );
+        
+        if (bundleDelivered) {
+          return NextResponse.json({
+            success: true,
+            bundled: true,
+            bundle_id: conflictCheck.bundleId,
+            message: "Reminder delivered as part of bundle",
+          });
+        }
+      } else {
+        // Bundle time not reached yet, suppress this individual reminder
+        return NextResponse.json({
+          success: false,
+          suppressed: true,
+          reason: "BUNDLED",
+          message: "Reminder will be delivered as part of bundle",
+          bundle_id: conflictCheck.bundleId,
+        });
+      }
+    }
 
     const suppressionCheck = await checkReminderSuppression(
       reminder.user_id,
@@ -480,6 +523,13 @@ async function handler(request: Request) {
 
     // Log reminder_completed event when reminder is successfully sent
     if (overallSuccess) {
+      // Record cooldown tracking
+      await recordCooldownTracking(
+        reminder.user_id,
+        reminderId,
+        reminder.contact_id
+      );
+
       // Fetch contact name if contact_id exists
       let contactName: string | undefined;
       if (reminder.contact_id) {

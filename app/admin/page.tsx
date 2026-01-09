@@ -34,6 +34,7 @@ import {
 import { UserSearch } from "@/components/admin/user-search";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { AffirmationAnalyticsAdmin } from "@/components/affirmation-analytics-admin";
 import {
   ChartContainer,
   ChartTooltip,
@@ -372,6 +373,9 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Affirmation Analytics */}
+      <AffirmationAnalyticsAdmin />
 
       {/* Additional Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
