@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import {
   Card,
   CardContent,
@@ -471,7 +471,7 @@ export default function ReminderDetailPage() {
                               mode="single"
                               selected={dateValue}
                               onSelect={(date) => date && setDateValue(date)}
-                              disabled={(date) => date < new Date()}
+                              disabled={(date) => startOfDay(date) < startOfDay(new Date())}
                               initialFocus
                             />
                           </PopoverContent>
