@@ -35,6 +35,7 @@ export default function RemindersPage() {
   const [page, setPage] = useState(1)
   const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [overdueHandling, setOverdueHandling] = useState<"gentle_nudge" | "escalation" | "none">("gentle_nudge")
   const pageSize = 10
   const hasFilters =
     searchTerm.trim() !== "" || toneFilter !== "all" || methodFilter !== "all" || statusTab !== "all" || categoryTab !== "all"
@@ -170,6 +171,20 @@ export default function RemindersPage() {
 
         setReminders(normalized)
         setHasLoaded(true)
+
+        // Fetch overdue handling preference
+        try {
+          const prefsResponse = await fetch("/api/preferences")
+          if (prefsResponse.ok) {
+            const prefsData = await prefsResponse.json()
+            if (prefsData.preferences?.overdue_handling) {
+              setOverdueHandling(prefsData.preferences.overdue_handling)
+            }
+          }
+        } catch (err) {
+          // Fail silently - use default
+          console.error("Failed to fetch overdue handling preference:", err)
+        }
 
         // Check for overdue reminders after loading
         await processOverdueReminders(normalized)
@@ -456,6 +471,7 @@ export default function RemindersPage() {
               setSelectedReminder(reminder)
               setIsDialogOpen(true)
             }}
+            overdueHandling={overdueHandling}
           />
 
           <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
