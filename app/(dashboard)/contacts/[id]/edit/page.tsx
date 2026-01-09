@@ -14,6 +14,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface Contact {
   id: string;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
+  company: string | null;
+  job_title: string | null;
+  tags: string[] | null;
   email: string | null;
   phone: string | null;
   notes: string | null;
@@ -27,7 +32,11 @@ export default function EditContactPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
-    name: "",
+    first_name: "",
+    last_name: "",
+    company: "",
+    job_title: "",
+    tags: "",
     email: "",
     phone: "",
     notes: "",
@@ -46,7 +55,11 @@ export default function EditContactPage() {
       const data = await response.json();
       const contact: Contact = data.contact;
       setFormData({
-        name: contact.name || "",
+        first_name: contact.first_name || "",
+        last_name: contact.last_name || "",
+        company: contact.company || "",
+        job_title: contact.job_title || "",
+        tags: contact.tags ? contact.tags.join(", ") : "",
         email: contact.email || "",
         phone: contact.phone || "",
         notes: contact.notes || "",
@@ -70,7 +83,11 @@ export default function EditContactPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: formData.name.trim(),
+          first_name: formData.first_name.trim() || null,
+          last_name: formData.last_name.trim() || null,
+          company: formData.company.trim() || null,
+          job_title: formData.job_title.trim() || null,
+          tags: formData.tags.trim() ? formData.tags.split(",").map(t => t.trim()).filter(t => t) : null,
           email: formData.email.trim() || null,
           phone: formData.phone.trim() || null,
           notes: formData.notes.trim() || null,
@@ -129,21 +146,33 @@ export default function EditContactPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">
-                Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Contact name"
-                required
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="first_name">
+                  First Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="first_name"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  placeholder="John"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="last_name">Last Name</Label>
+                <Input
+                  id="last_name"
+                  value={formData.last_name}
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  placeholder="Doe"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">
+                Email <span className="text-muted-foreground text-xs">(required if no first name)</span>
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -151,6 +180,40 @@ export default function EditContactPage() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="email@example.com"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="company">Company</Label>
+                <Input
+                  id="company"
+                  value={formData.company}
+                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                  placeholder="Acme Inc."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="job_title">Job Title</Label>
+                <Input
+                  id="job_title"
+                  value={formData.job_title}
+                  onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+                  placeholder="Software Engineer"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tags">Tags</Label>
+              <Input
+                id="tags"
+                value={formData.tags}
+                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                placeholder="client, important, follow-up (comma-separated)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Separate multiple tags with commas
+              </p>
             </div>
 
             <div className="space-y-2">

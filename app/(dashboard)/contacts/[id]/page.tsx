@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, FileText, Plus, Calendar, Clock, GitMerge } from "lucide-react";
+import { ArrowLeft, Mail, Phone, FileText, Plus, Calendar, Clock, GitMerge, User } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RemindersTable } from "@/app/(dashboard)/reminders-table";
@@ -32,6 +32,11 @@ import {
 interface Contact {
   id: string;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
+  company: string | null;
+  job_title: string | null;
+  tags: string[] | null;
   email: string | null;
   phone: string | null;
   notes: string | null;
@@ -181,7 +186,30 @@ export default function ContactDetailPage() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">{contact.name}</h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-3xl font-bold">
+                {contact.first_name && contact.last_name
+                  ? `${contact.first_name} ${contact.last_name}`
+                  : contact.first_name || contact.name}
+              </h1>
+              {contact.company && (
+                <span className="text-lg text-muted-foreground">
+                  {contact.company}
+                </span>
+              )}
+            </div>
+            {contact.tags && contact.tags.length > 0 && (
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {contact.tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
             <p className="text-muted-foreground mt-1">
               Contact details and linked reminders
             </p>
@@ -211,6 +239,15 @@ export default function ContactDetailPage() {
           <CardTitle>Contact Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {contact.job_title && (
+            <div className="flex items-center gap-3">
+              <User className="w-5 h-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Job Title</p>
+                <p className="text-sm text-muted-foreground">{contact.job_title}</p>
+              </div>
+            </div>
+          )}
           {contact.email && (
             <div className="flex items-center gap-3">
               <Mail className="w-5 h-5 text-muted-foreground" />

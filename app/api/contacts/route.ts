@@ -34,7 +34,10 @@ export async function GET(request: Request) {
       query = query.is("archived_at", null);
     }
 
-    const { data: contacts, error } = await query.order("name", {
+    // Order by first_name, then last_name, falling back to name for legacy data
+    const { data: contacts, error } = await query.order("first_name", {
+      ascending: true,
+    }).order("last_name", {
       ascending: true,
     });
 
@@ -65,21 +68,65 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, email, phone, notes } = body;
+    const { 
+      name, // Legacy support
+      first_name, 
+      last_name, 
+      company, 
+      job_title, 
+      tags, 
+      source,
+      email, 
+      phone, 
+      notes 
+    } = body;
 
-    // Validate required fields
-    if (!name || name.trim() === "") {
+    // Handle backward compatibility: if name is provided but first_name is not, split it
+    let firstName = first_name?.trim() || "";
+    let lastName = last_name?.trim() || "";
+    
+    if (!firstName && name) {
+      // Legacy: split name into first_name and last_name
+      const nameParts = name.trim().split(/\s+/);
+      if (nameParts.length === 1) {
+        firstName = nameParts[0];
+        lastName = "";
+      } else if (nameParts.length >= 2) {
+        firstName = nameParts[0];
+        lastName = nameParts.slice(1).join(" ");
+      }
+    }
+
+    // Validate: first_name OR email required (per spec)
+    if (!firstName && (!email || email.trim() === "")) {
       return NextResponse.json(
-        { error: "Name is required" },
+        { error: "First name or email is required" },
         { status: 400 }
       );
+    }
+
+    // Normalize tags: ensure it's an array
+    let tagsArray: string[] = [];
+    if (tags) {
+      if (Array.isArray(tags)) {
+        tagsArray = tags.filter(t => t && t.trim() !== "").map(t => t.trim());
+      } else if (typeof tags === "string") {
+        // Support comma-separated string
+        tagsArray = tags.split(",").map(t => t.trim()).filter(t => t !== "");
+      }
     }
 
     const { data: contact, error } = await supabase
       .from("contacts")
       .insert({
         user_id: user.id,
-        name: name.trim(),
+        name: firstName && lastName ? `${firstName} ${lastName}`.trim() : firstName || name?.trim() || null, // Keep name for backward compatibility
+        first_name: firstName || null,
+        last_name: lastName || null,
+        company: company?.trim() || null,
+        job_title: job_title?.trim() || null,
+        tags: tagsArray.length > 0 ? tagsArray : null,
+        source: source?.trim() || "manual",
         email: email?.trim() || null,
         phone: phone?.trim() || null,
         notes: notes?.trim() || null,

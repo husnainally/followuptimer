@@ -500,9 +500,23 @@ async function handler(request: Request) {
     }
 
     // Update reminder status (success if at least one notification succeeded)
+    const now = new Date();
+    const updateData: any = { status: overallSuccess ? "sent" : "failed" };
+    
+    // If reminder was successfully sent and has a contact, update last_interaction_at
+    if (overallSuccess && reminder.contact_id) {
+      updateData.last_interaction_at = now.toISOString();
+      
+      // Update contact's last_interaction_at as well
+      await supabase
+        .from("contacts")
+        .update({ updated_at: now.toISOString() })
+        .eq("id", reminder.contact_id);
+    }
+    
     await supabase
       .from("reminders")
-      .update({ status: overallSuccess ? "sent" : "failed" })
+      .update(updateData)
       .eq("id", reminderId);
 
     // Log reminder_triggered event when reminder actually fires (before checking success)
