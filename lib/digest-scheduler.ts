@@ -17,6 +17,10 @@ export interface UserDigestInfo {
 /**
  * Get users who are due for a weekly digest based on their preferences and current time
  * Handles timezone-aware scheduling with DST support
+ * 
+ * For daily cron compatibility: Checks if user's preferred digest day/time has passed
+ * in the current week. This allows the daily cron to catch all users who were due
+ * since the last run, not just those due at the exact moment.
  */
 export async function getUsersDueForDigest(
   currentTime: Date = new Date()
@@ -58,31 +62,52 @@ export async function getUsersDueForDigest(
     const expectedHour = hours || 8;
     const expectedMinute = minutes || 0;
 
-    // Get current day of week in user's timezone (0=Sunday, 1=Monday, ..., 6=Saturday)
-    const currentDay = userLocalTime.getDay();
-    const currentHour = userLocalTime.getHours();
-    const currentMinute = userLocalTime.getMinutes();
-
-    // Check if current day matches digest day and time is within the hour
-    // We check within the hour to account for cron job timing variations
-    if (
-      currentDay === digestDay &&
-      currentHour === expectedHour &&
-      currentMinute >= expectedMinute &&
-      currentMinute < expectedMinute + 60
-    ) {
-      dueUsers.push({
-        user_id: profile.id,
-        email: profile.email,
-        timezone: userTimezone,
-        preferences: {
-          digest_day: digestDay,
-          digest_time: digestTime,
-          digest_channel: pref.digest_channel as "email" | "in_app" | "both",
-          digest_detail_level: pref.digest_detail_level as "light" | "standard",
-          only_when_active: pref.only_when_active || false,
-        },
-      });
+    // Calculate week boundaries for this user
+    const { weekStart } = calculateWeekBoundaries(userLocalTime, userTimezone);
+    
+    // Calculate when the digest should be sent this week (user's preferred day/time)
+    // Week starts on Monday (day 1), so we need to adjust
+    // digestDay: 0=Sunday, 1=Monday, ..., 6=Saturday
+    // weekStart is Monday, so:
+    // - Monday (1) = 0 days
+    // - Tuesday (2) = 1 day
+    // - ...
+    // - Sunday (0) = 6 days
+    const daysToAdd = digestDay === 0 ? 6 : digestDay - 1;
+    const digestDateTime = new Date(weekStart);
+    digestDateTime.setDate(weekStart.getDate() + daysToAdd);
+    digestDateTime.setHours(expectedHour, expectedMinute, 0, 0);
+    
+    // Check if the digest time has passed in the current week
+    const now = userLocalTime.getTime();
+    const digestTimestamp = digestDateTime.getTime();
+    const oneHourInMs = 60 * 60 * 1000;
+    const oneWeekInMs = 7 * 24 * 60 * 60 * 1000;
+    
+    // User is due if:
+    // 1. The digest time has passed (at least 1 hour ago to account for cron timing variations)
+    // 2. But not more than 1 week ago (to avoid sending old digests)
+    // 3. And no digest has been sent for this week (idempotency check)
+    const timeSinceDigestTime = now - digestTimestamp;
+    const isDue = timeSinceDigestTime >= oneHourInMs && timeSinceDigestTime < oneWeekInMs;
+    
+    if (isDue) {
+      // Check if digest was already sent for this week (idempotency)
+      const wasSent = await wasDigestSentThisWeek(profile.id, weekStart);
+      if (!wasSent) {
+        dueUsers.push({
+          user_id: profile.id,
+          email: profile.email,
+          timezone: userTimezone,
+          preferences: {
+            digest_day: digestDay,
+            digest_time: digestTime,
+            digest_channel: pref.digest_channel as "email" | "in_app" | "both",
+            digest_detail_level: pref.digest_detail_level as "light" | "standard",
+            only_when_active: pref.only_when_active || false,
+          },
+        });
+      }
     }
   }
 
