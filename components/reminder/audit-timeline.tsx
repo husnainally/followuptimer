@@ -155,6 +155,19 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
           >
             {events.map((event, index) => {
               const displayInfo = getEventDisplayInfo(event.event_type);
+              // Override label for snoozed events that have a new_remind_at (rescheduled)
+              const eventData = event.event_data as Record<string, unknown> | null;
+              const newRemindAt = eventData?.new_remind_at;
+              const durationMinutes = eventData?.duration_minutes;
+              const isRescheduled =
+                event.event_type === "reminder_snoozed" &&
+                eventData &&
+                newRemindAt != null;
+              const finalLabel = isRescheduled ? "Rescheduled" : displayInfo.label;
+              const finalDescription = isRescheduled
+                ? "Reminder was rescheduled to a new time"
+                : displayInfo.description;
+              
               const isLast = index === events.length - 1;
               const eventId = `audit-event-${event.id}`;
               const iconId = `audit-icon-${event.id}`;
@@ -193,7 +206,7 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
                         id={eventId}
                         className="text-sm font-medium text-foreground"
                       >
-                        {displayInfo.label}
+                        {finalLabel}
                       </span>
                     </div>
                     <p
@@ -201,7 +214,7 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
                       className="text-xs text-muted-foreground mb-1"
                       aria-describedby={iconId}
                     >
-                      {displayInfo.description}
+                      {finalDescription}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       <time dateTime={event.created_at}>
@@ -224,6 +237,35 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
                                 .reason_code || "Unknown"
                             )}
                           </p>
+                        </div>
+                      )}
+
+                    {/* Snooze/Reschedule details */}
+                    {event.event_type === "reminder_snoozed" &&
+                      eventData && (
+                        <div
+                          className="mt-2 p-2 rounded-md bg-muted/50 text-xs"
+                          role="region"
+                          aria-label="Reschedule details"
+                        >
+                          {typeof newRemindAt === "string" && (
+                            <p className="text-muted-foreground">
+                              Rescheduled to:{" "}
+                              {new Date(newRemindAt).toLocaleString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          )}
+                          {durationMinutes != null && (
+                            <p className="text-muted-foreground mt-1">
+                              Duration:{" "}
+                              {Math.round(Number(durationMinutes))} minutes
+                            </p>
+                          )}
                         </div>
                       )}
                   </div>
