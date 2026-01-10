@@ -158,7 +158,7 @@ export function CreateReminderClient() {
                           mode="single"
                           selected={dateValue}
                           onSelect={(date) => date && setDateValue(date)}
-                          disabled={(date) => date < new Date()}
+                          disabled={(date) => startOfDay(date) < startOfDay(new Date())}
                           initialFocus
                         />
                       </PopoverContent>

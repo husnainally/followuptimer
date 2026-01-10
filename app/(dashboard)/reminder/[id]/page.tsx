@@ -71,7 +71,9 @@ export default function ReminderDetailPage() {
   const [noteText, setNoteText] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isCreatingFollowup, setIsCreatingFollowup] = useState(false);
-  const [suppressionTransparency, setSuppressionTransparency] = useState<"proactive" | "on_open">("proactive");
+  const [suppressionTransparency, setSuppressionTransparency] = useState<
+    "proactive" | "on_open"
+  >("proactive");
 
   const form = useForm<ReminderFormData>({
     resolver: zodResolver(reminderSchema),
@@ -179,12 +181,17 @@ export default function ReminderDetailPage() {
         if (prefsResponse.ok) {
           const prefsData = await prefsResponse.json();
           if (prefsData.preferences?.suppression_transparency) {
-            setSuppressionTransparency(prefsData.preferences.suppression_transparency);
+            setSuppressionTransparency(
+              prefsData.preferences.suppression_transparency
+            );
           }
         }
       } catch (err) {
         // Fail silently - use default (proactive)
-        console.error("Failed to fetch suppression transparency preference:", err);
+        console.error(
+          "Failed to fetch suppression transparency preference:",
+          err
+        );
       }
     } catch (error: any) {
       const message = error?.message || "Failed to load reminder";
@@ -413,7 +420,9 @@ export default function ReminderDetailPage() {
         <div className="lg:col-span-2">
           <Card className="bg-card">
             <CardHeader className="border-b border-border">
-              <h1 className="leading-none font-semibold text-lg">Reminder Details</h1>
+              <h1 className="leading-none font-semibold text-lg">
+                Reminder Details
+              </h1>
               <CardDescription>Modify your reminder settings</CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -471,7 +480,9 @@ export default function ReminderDetailPage() {
                               mode="single"
                               selected={dateValue}
                               onSelect={(date) => date && setDateValue(date)}
-                              disabled={(date) => startOfDay(date) < startOfDay(new Date())}
+                              disabled={(date) =>
+                                startOfDay(date) < startOfDay(new Date())
+                              }
                               initialFocus
                             />
                           </PopoverContent>
@@ -544,7 +555,11 @@ export default function ReminderDetailPage() {
                       type="submit"
                       disabled={isLoading}
                       className="flex-1"
-                      aria-label={isLoading ? "Saving reminder changes" : "Save reminder changes"}
+                      aria-label={
+                        isLoading
+                          ? "Saving reminder changes"
+                          : "Save reminder changes"
+                      }
                     >
                       {isLoading ? "Saving..." : "Save Changes"}
                     </Button>
@@ -561,7 +576,9 @@ export default function ReminderDetailPage() {
           {contactId && (
             <Card className="bg-card">
               <CardHeader className="pb-3">
-                <h2 className="text-base leading-none font-semibold">Quick Actions</h2>
+                <h2 className="text-base leading-none font-semibold">
+                  Quick Actions
+                </h2>
               </CardHeader>
               <CardContent className="space-y-2">
                 <Link href={`/contacts/${contactId}`}>
@@ -589,7 +606,11 @@ export default function ReminderDetailPage() {
                     className="w-full justify-start gap-2"
                     onClick={handleCreateFollowup}
                     disabled={isCreatingFollowup}
-                    aria-label={isCreatingFollowup ? "Creating follow-up reminder" : "Create next follow-up reminder"}
+                    aria-label={
+                      isCreatingFollowup
+                        ? "Creating follow-up reminder"
+                        : "Create next follow-up reminder"
+                    }
                   >
                     <Repeat className="w-4 h-4" aria-hidden="true" />
                     {isCreatingFollowup
@@ -705,7 +726,11 @@ export default function ReminderDetailPage() {
                       className=""
                       disabled={isDeleting}
                       onClick={handleDelete}
-                      aria-label={isDeleting ? "Deleting reminder" : "Confirm delete reminder"}
+                      aria-label={
+                        isDeleting
+                          ? "Deleting reminder"
+                          : "Confirm delete reminder"
+                      }
                     >
                       {isDeleting ? "Deleting..." : "Delete"}
                     </Button>
