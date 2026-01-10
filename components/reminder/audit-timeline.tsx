@@ -68,6 +68,42 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
     fetchTimeline(0, true);
   }, [fetchTimeline]);
 
+  // Add refresh on visibility change
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchTimeline(0, true);
+      }
+    };
+    
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [fetchTimeline]);
+
+  // Add periodic refresh (every 15 seconds when visible)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchTimeline(0, true);
+      }
+    }, 15000); // Every 15 seconds
+    
+    return () => clearInterval(interval);
+  }, [fetchTimeline]);
+
+  // Listen for custom reminder-updated events
+  useEffect(() => {
+    const handleReminderUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail?.reminderId === reminderId) {
+        fetchTimeline(0, true);
+      }
+    };
+    
+    window.addEventListener('reminder-updated', handleReminderUpdate);
+    return () => window.removeEventListener('reminder-updated', handleReminderUpdate);
+  }, [reminderId, fetchTimeline]);
+
   const handleLoadMore = useCallback(() => {
     if (!loadingMore && hasMore) {
       fetchTimeline(offset, false);

@@ -27,17 +27,21 @@ interface SnoozeCandidate {
 
 export function PopupSystem() {
   const [currentPopup, setCurrentPopup] = useState<PopupData | null>(null);
-  const [snoozeCandidates, setSnoozeCandidates] = useState<SnoozeCandidate[]>([]);
+  const [snoozeCandidates, setSnoozeCandidates] = useState<SnoozeCandidate[]>(
+    []
+  );
   const [isLoading, setIsLoading] = useState(false);
-  const [uiState, setUiState] = useState<"entering" | "visible" | "exiting">("entering");
+  const [uiState, setUiState] = useState<"entering" | "visible" | "exiting">(
+    "entering"
+  );
 
   useEffect(() => {
     fetchNextPopup();
-    
+
     // Poll for new popups every 8 seconds when tab is visible
     // When tab is hidden, reduce polling to every 30 seconds to save resources
     let interval: NodeJS.Timeout;
-    
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         // Tab is hidden - reduce polling frequency
@@ -50,17 +54,17 @@ export function PopupSystem() {
         interval = setInterval(fetchNextPopup, 8000); // 8 seconds when visible
       }
     };
-    
+
     // Set initial interval based on visibility
     if (document.hidden) {
       interval = setInterval(fetchNextPopup, 30000);
     } else {
       interval = setInterval(fetchNextPopup, 8000);
     }
-    
+
     // Listen for visibility changes
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    
+
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -73,7 +77,10 @@ export function PopupSystem() {
       if (!response.ok) return;
 
       const data = await response.json();
-      if (data.popup && ["queued", "pending", "displayed", "shown"].includes(data.popup.status)) {
+      if (
+        data.popup &&
+        ["queued", "pending", "displayed", "shown"].includes(data.popup.status)
+      ) {
         setCurrentPopup(data.popup);
         setUiState("entering");
         // let the browser paint, then settle to visible for smooth transitions
@@ -82,7 +89,10 @@ export function PopupSystem() {
         // Fetch snooze suggestions if reminder_id exists and smart suggestions enabled
         if (data.popup.reminder_id) {
           // Check if smart suggestions are enabled before fetching
-          fetchSnoozeSuggestions(data.popup.reminder_id, data.popup.payload).catch(() => {
+          fetchSnoozeSuggestions(
+            data.popup.reminder_id,
+            data.popup.payload
+          ).catch(() => {
             // If fetch fails (e.g., smart suggestions disabled), use empty candidates
             setSnoozeCandidates([]);
           });
@@ -116,9 +126,13 @@ export function PopupSystem() {
       }
 
       const data = await response.json();
-      if (data.candidates && Array.isArray(data.candidates) && data.candidates.length > 0) {
+      if (
+        data.candidates &&
+        Array.isArray(data.candidates) &&
+        data.candidates.length > 0
+      ) {
         setSnoozeCandidates(data.candidates);
-        
+
         // Log suggestion_shown event
         try {
           await fetch("/api/events", {
@@ -129,7 +143,9 @@ export function PopupSystem() {
               event_data: {
                 reminder_id: reminderId,
                 candidates_count: data.candidates.length,
-                recommended_type: data.candidates.find((c: { recommended?: boolean }) => c.recommended)?.type,
+                recommended_type: data.candidates.find(
+                  (c: { recommended?: boolean }) => c.recommended
+                )?.type,
                 context_type: eventType || "unknown",
               },
             }),
@@ -194,6 +210,28 @@ export function PopupSystem() {
         }
       }
 
+      // Dispatch custom event to trigger refreshes after snooze
+      if (
+        actionType === "SNOOZE" &&
+        currentPopup?.reminder_id &&
+        typeof window !== "undefined"
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("reminder-updated", {
+            detail: { reminderId: currentPopup.reminder_id },
+          })
+        );
+
+        // Also refresh if on reminder detail page
+        if (
+          window.location.pathname.includes("/reminder/") &&
+          window.location.pathname.includes(currentPopup.reminder_id)
+        ) {
+          // Trigger a soft refresh by reloading the page
+          window.location.reload();
+        }
+      }
+
       toast.success("Done");
       setUiState("exiting");
       setTimeout(() => {
@@ -241,7 +279,8 @@ export function PopupSystem() {
   ];
 
   // Don't show snooze for reminder_completed popups (reminder already sent)
-  const sourceEventType = (currentPopup.payload as Record<string, unknown>)?.source_event_type as string | undefined;
+  const sourceEventType = (currentPopup.payload as Record<string, unknown>)
+    ?.source_event_type as string | undefined;
   const isReminderCompleted = sourceEventType === "reminder_completed";
   const canSnooze = currentPopup.reminder_id && !isReminderCompleted;
 
@@ -273,10 +312,13 @@ export function PopupSystem() {
             ? (minutes, scheduledTime) => {
                 // Find the candidate that matches
                 const candidate = snoozeCandidates.find(
-                  (c) => c.scheduledTime === scheduledTime || 
-                  (scheduledTime && new Date(c.scheduledTime).getTime() === new Date(scheduledTime).getTime())
+                  (c) =>
+                    c.scheduledTime === scheduledTime ||
+                    (scheduledTime &&
+                      new Date(c.scheduledTime).getTime() ===
+                        new Date(scheduledTime).getTime())
                 );
-                
+
                 // Log suggestion_clicked event if candidate found
                 if (candidate) {
                   fetch("/api/events", {
@@ -295,7 +337,7 @@ export function PopupSystem() {
                     // Fail silently - analytics is non-critical
                   });
                 }
-                
+
                 handleAction(
                   currentPopup.id,
                   "SNOOZE",
@@ -306,7 +348,8 @@ export function PopupSystem() {
                     candidate_type: candidate?.type,
                     was_recommended: candidate?.recommended || false,
                   },
-                  scheduledTime || new Date(Date.now() + minutes * 60 * 1000).toISOString()
+                  scheduledTime ||
+                    new Date(Date.now() + minutes * 60 * 1000).toISOString()
                 );
               }
             : undefined
@@ -327,8 +370,14 @@ export function PopupSystem() {
                 )
             : undefined
         }
-        snoozeOptions={canSnooze && snoozeCandidates.length === 0 ? snoozeOptions : undefined}
-        snoozeCandidates={canSnooze && snoozeCandidates.length > 0 ? snoozeCandidates : undefined}
+        snoozeOptions={
+          canSnooze && snoozeCandidates.length === 0 ? snoozeOptions : undefined
+        }
+        snoozeCandidates={
+          canSnooze && snoozeCandidates.length > 0
+            ? snoozeCandidates
+            : undefined
+        }
         onMarkDone={
           currentPopup.reminder_id
             ? () =>
@@ -338,11 +387,15 @@ export function PopupSystem() {
                   { reminder_id: currentPopup.reminder_id },
                   undefined
                 )
-            : () => handleAction(currentPopup.id, "MARK_DONE", currentPopup.action_data)
+            : () =>
+                handleAction(
+                  currentPopup.id,
+                  "MARK_DONE",
+                  currentPopup.action_data
+                )
         }
         onDismiss={() => handleDismiss(currentPopup.id)}
       />
     </div>
   );
 }
-

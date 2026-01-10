@@ -206,6 +206,42 @@ export default function ReminderDetailPage() {
     loadReminder();
   }, [loadReminder]);
 
+  // Add visibility-based refresh
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadReminder();
+      }
+    };
+    
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [loadReminder]);
+
+  // Add periodic refresh (every 30 seconds when visible)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadReminder();
+      }
+    }, 30000); // Every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [loadReminder]);
+
+  // Listen for custom reminder-updated events
+  useEffect(() => {
+    const handleReminderUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail?.reminderId === reminderId) {
+        loadReminder();
+      }
+    };
+    
+    window.addEventListener('reminder-updated', handleReminderUpdate);
+    return () => window.removeEventListener('reminder-updated', handleReminderUpdate);
+  }, [reminderId, loadReminder]);
+
   useEffect(() => {
     if (!dateValue || !timeValue) return;
     const [hours, minutes] = timeValue.split(":").map(Number);
