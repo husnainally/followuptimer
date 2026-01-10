@@ -63,7 +63,7 @@ async function handler(request: Request) {
 
     // Log reminder_due event when reminder time is reached
     const { logEvent } = await import("@/lib/events");
-    await logEvent({
+    const dueEventResult = await logEvent({
       userId: reminder.user_id,
       eventType: "reminder_due",
       eventData: {
@@ -298,7 +298,15 @@ async function handler(request: Request) {
                 error: errorMessage,
               });
 
-              // Log email error
+              // Log email error as WARNING, not error (non-blocking)
+              console.warn("[Email] Email send failed (non-blocking):", {
+                error: errorMessage,
+                reminderId: reminderId,
+                userId: reminder.user_id,
+                to: profile?.email,
+              });
+
+              // Log email error to database
               await supabase.from("sent_logs").insert({
                 user_id: reminder.user_id,
                 reminder_id: reminderId,
@@ -603,6 +611,31 @@ async function handler(request: Request) {
           contactId: reminder.contact_id || undefined,
           reminderId: reminderId,
         });
+      }
+    }
+
+    // Create popup from reminder_due event (for reminder_due popup rules)
+    // This should happen regardless of notification success - popups show when reminder is due
+    if (dueEventResult.success && dueEventResult.eventId) {
+      try {
+        const { createPopupsFromEvent } = await import("@/lib/popup-engine");
+        await createPopupsFromEvent({
+          userId: reminder.user_id,
+          eventId: dueEventResult.eventId,
+          eventType: "reminder_due",
+          eventData: {
+            reminder_id: reminderId,
+            remind_at: scheduledTime.toISOString(),
+            notification_method: reminder.notification_method,
+          },
+          contactId: reminder.contact_id || undefined,
+          reminderId: reminderId,
+        });
+      } catch (popupError) {
+        // Log but don't fail - popup creation is non-critical
+        if (!isProduction) {
+          console.warn("[Webhook] Failed to create popup from reminder_due event:", popupError);
+        }
       }
     }
 

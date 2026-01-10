@@ -59,7 +59,7 @@ export async function sendReminderEmail({
     });
 
     if (result.error) {
-      console.error("[Email] Resend API error:", result.error);
+      console.warn("[Email] Resend API error (non-blocking):", result.error);
       throw new Error(result.error.message || "Failed to send email");
     }
 
@@ -70,7 +70,7 @@ export async function sendReminderEmail({
 
     return result;
   } catch (error) {
-    console.error("[Email] Error sending email:", {
+    console.warn("[Email] Error sending email (non-blocking):", {
       error,
       to,
       subject,
