@@ -24,7 +24,6 @@ export type ReminderSuppressionReason =
   | "dnd_active" // Legacy, kept for backward compatibility
   | "other"; // Legacy, kept for backward compatibility
 
-
 export interface SuppressionCheckResult {
   suppressed: boolean;
   reason?: ReminderSuppressionReason;
@@ -55,6 +54,7 @@ export async function checkReminderSuppression(
     }
 
     // Check working hours (if not allowed outside)
+    // This already checks if the day is in working_days array
     if (!isWithinWorkingHours(scheduledTime, prefs, timezone)) {
       return {
         suppressed: true,
@@ -64,8 +64,19 @@ export async function checkReminderSuppression(
       };
     }
 
-    // Check weekend
-    if (!prefs.allow_weekends && isWeekend(scheduledTime, timezone)) {
+    // Check weekend - only suppress if the day is NOT in working_days AND allow_weekends is false
+    // If a day is explicitly in working_days (e.g., Saturday), it should be allowed
+    const timeInTZ = new Date(
+      scheduledTime.toLocaleString("en-US", { timeZone: timezone })
+    );
+    const dayOfWeek = timeInTZ.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+
+    // Only check weekend suppression if the day is NOT explicitly in working_days
+    if (
+      !prefs.working_days.includes(dayOfWeek) &&
+      !prefs.allow_weekends &&
+      isWeekend(scheduledTime, timezone)
+    ) {
       return {
         suppressed: true,
         reason: "WORKDAY_DISABLED", // Weekend is a form of workday disabled
@@ -158,7 +169,10 @@ async function checkDND(
     }
 
     // Check emergency contacts override
-    if (reminder.contact_id && overrideRules.emergency_contacts.includes(reminder.contact_id)) {
+    if (
+      reminder.contact_id &&
+      overrideRules.emergency_contacts.includes(reminder.contact_id)
+    ) {
       return { suppressed: false }; // Emergency contact, allow through
     }
 
@@ -233,7 +247,8 @@ async function checkCooldown(
     // Check if cooldown period has passed
     const lastReminderAt = new Date(tracking.last_reminder_at);
     const now = new Date();
-    const minutesSince = (now.getTime() - lastReminderAt.getTime()) / (1000 * 60);
+    const minutesSince =
+      (now.getTime() - lastReminderAt.getTime()) / (1000 * 60);
 
     if (minutesSince < cooldownMinutes) {
       // Still in cooldown
@@ -265,24 +280,36 @@ function getNextValidTime(
 ): Date {
   // Adjust to next valid time based on preferences
   let nextTime = new Date(time);
-  
+
   // If in quiet hours, move to after quiet hours
   if (isWithinQuietHours(nextTime, prefs, timezone)) {
     nextTime = adjustToWorkingHours(nextTime, prefs, timezone);
   }
-  
+
   // If outside working hours, adjust
   if (!isWithinWorkingHours(nextTime, prefs, timezone)) {
     nextTime = adjustToWorkingHours(nextTime, prefs, timezone);
   }
-  
+
   // If weekend and not allowed, move to next working day
-  if (!prefs.allow_weekends && isWeekend(nextTime, timezone)) {
+  // Only adjust if the day is NOT explicitly in working_days
+  const nextTimeInTZ = new Date(
+    nextTime.toLocaleString("en-US", { timeZone: timezone })
+  );
+  const nextDayOfWeek = nextTimeInTZ.getDay();
+
+  if (
+    !prefs.working_days.includes(nextDayOfWeek) &&
+    !prefs.allow_weekends &&
+    isWeekend(nextTime, timezone)
+  ) {
     nextTime = getNextWorkingDay(nextTime, prefs, timezone);
-    const [startHour, startMin] = prefs.working_hours_start.split(":").map(Number);
+    const [startHour, startMin] = prefs.working_hours_start
+      .split(":")
+      .map(Number);
     nextTime.setHours(startHour, startMin, 0, 0);
   }
-  
+
   return nextTime;
 }
 
@@ -302,20 +329,18 @@ export async function recordCooldownTracking(
     const now = new Date();
 
     // Upsert cooldown tracking (update if exists, insert if not)
-    await supabase
-      .from("reminder_cooldown_tracking")
-      .upsert(
-        {
-          user_id: userId,
-          contact_id: contactId || null,
-          entity_type: entityType,
-          last_reminder_at: now.toISOString(),
-          updated_at: now.toISOString(),
-        },
-        {
-          onConflict: "user_id,contact_id,entity_type",
-        }
-      );
+    await supabase.from("reminder_cooldown_tracking").upsert(
+      {
+        user_id: userId,
+        contact_id: contactId || null,
+        entity_type: entityType,
+        last_reminder_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      },
+      {
+        onConflict: "user_id,contact_id,entity_type",
+      }
+    );
   } catch (error) {
     console.error("Failed to record cooldown tracking:", error);
     // Fail silently - cooldown tracking is non-critical
@@ -356,4 +381,3 @@ export async function logReminderSuppression(
     // Fail silently - suppression logging is non-critical
   }
 }
-

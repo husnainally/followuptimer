@@ -123,7 +123,14 @@ export async function POST(
       adjustmentReason = adjustmentReason || "quiet_hours";
     }
 
-    if (!prefs.allow_weekends && isWeekend(newTime, timezone)) {
+    // Only adjust for weekends if the day is NOT explicitly in working_days
+    // If Saturday is in working_days, it should be allowed
+    const newTimeInTZ = new Date(
+      newTime.toLocaleString("en-US", { timeZone: timezone })
+    );
+    const newDayOfWeek = newTimeInTZ.getDay();
+    
+    if (!prefs.working_days.includes(newDayOfWeek) && !prefs.allow_weekends && isWeekend(newTime, timezone)) {
       newTime = getNextWorkingDay(newTime, prefs, timezone);
       const [startHour, startMin] = prefs.working_hours_start.split(":").map(Number);
       newTime.setHours(startHour, startMin, 0, 0);
