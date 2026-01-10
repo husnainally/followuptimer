@@ -12,7 +12,10 @@ import {
   recordCooldownTracking,
 } from "@/lib/reminder-suppression";
 import { getUserPreferences } from "@/lib/user-preferences";
-import { checkAndHandleConflicts, deliverBundle } from "@/lib/reminder-conflict-resolution";
+import {
+  checkAndHandleConflicts,
+  deliverBundle,
+} from "@/lib/reminder-conflict-resolution";
 
 // Route segment config
 export const dynamic = "force-dynamic";
@@ -90,14 +93,14 @@ async function handler(request: Request) {
       // (We deliver when the bundle time is reached)
       const bundleTime = new Date(scheduledTime);
       const now = new Date();
-      
+
       // If bundle time has been reached, deliver the bundle
       if (now >= bundleTime) {
         const bundleDelivered = await deliverBundle(
           conflictCheck.bundleId,
           reminder.user_id
         );
-        
+
         if (bundleDelivered) {
           return NextResponse.json({
             success: true,
@@ -510,22 +513,19 @@ async function handler(request: Request) {
     // Update reminder status (success if at least one notification succeeded)
     const now = new Date();
     const updateData: any = { status: overallSuccess ? "sent" : "failed" };
-    
+
     // If reminder was successfully sent and has a contact, update last_interaction_at
     if (overallSuccess && reminder.contact_id) {
       updateData.last_interaction_at = now.toISOString();
-      
+
       // Update contact's last_interaction_at as well
       await supabase
         .from("contacts")
         .update({ updated_at: now.toISOString() })
         .eq("id", reminder.contact_id);
     }
-    
-    await supabase
-      .from("reminders")
-      .update(updateData)
-      .eq("id", reminderId);
+
+    await supabase.from("reminders").update(updateData).eq("id", reminderId);
 
     // Log reminder_triggered event when reminder actually fires (before checking success)
     await logEvent({
@@ -634,7 +634,10 @@ async function handler(request: Request) {
       } catch (popupError) {
         // Log but don't fail - popup creation is non-critical
         if (!isProduction) {
-          console.warn("[Webhook] Failed to create popup from reminder_due event:", popupError);
+          console.warn(
+            "[Webhook] Failed to create popup from reminder_due event:",
+            popupError
+          );
         }
       }
     }
