@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Popup, type PopupTemplateType } from "@/components/ui/popup";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 interface PopupData {
   id: string;
@@ -34,9 +36,18 @@ export function PopupSystem() {
   const [uiState, setUiState] = useState<"entering" | "visible" | "exiting">(
     "entering"
   );
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const currentPopupRef = useRef<PopupData | null>(null);
 
   // Track if we've already played sound for this popup to avoid duplicates
   const [playedSoundForPopup, setPlayedSoundForPopup] = useState<string | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    currentPopupRef.current = currentPopup;
+  }, [currentPopup]);
 
   // Play ping sound when popup appears
   useEffect(() => {
@@ -50,11 +61,116 @@ export function PopupSystem() {
     }
   }, [currentPopup, uiState, playedSoundForPopup]);
 
+  // Initialize user and set up Realtime subscription
   useEffect(() => {
+    async function initializeRealtime() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          // User not authenticated, fallback to polling
+          setRealtimeConnected(false);
+          return;
+        }
+
+        setUserId(user.id);
+
+        // Set up Realtime subscription
+        const channel = supabase
+          .channel("popups-realtime")
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "popups",
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              // New popup created - fetch immediately
+              console.log("New popup detected via Realtime:", payload.new);
+              fetchNextPopup();
+            }
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "popups",
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              // Popup updated - refresh if it's the current popup
+              const updatedPopup = payload.new as Record<string, unknown>;
+              const current = currentPopupRef.current;
+              if (current?.id === updatedPopup.id) {
+                // Current popup was updated (e.g., dismissed, acted upon)
+                // If status changed to dismissed/acted/expired, close it
+                const status = updatedPopup.status as string;
+                if (
+                  ["dismissed", "acted", "expired"].includes(status) &&
+                  current
+                ) {
+                  setUiState("exiting");
+                  setTimeout(() => {
+                    setCurrentPopup(null);
+                    fetchNextPopup();
+                  }, 220);
+                } else {
+                  // Just refresh the popup data
+                  fetchNextPopup();
+                }
+              } else if (
+                updatedPopup.status === "queued" ||
+                updatedPopup.status === "pending"
+              ) {
+                // Another popup became available
+                if (!current) {
+                  fetchNextPopup();
+                }
+              }
+            }
+          )
+          .subscribe((status) => {
+            if (status === "SUBSCRIBED") {
+              setRealtimeConnected(true);
+              console.log("Realtime subscription active");
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              setRealtimeConnected(false);
+              console.warn("Realtime subscription failed, falling back to polling");
+            }
+          });
+
+        channelRef.current = channel;
+      } catch (error) {
+        console.error("Failed to initialize Realtime:", error);
+        setRealtimeConnected(false);
+      }
+    }
+
+    initializeRealtime();
+
+    return () => {
+      // Clean up Realtime subscription
+      if (channelRef.current) {
+        const supabase = createClient();
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, []);
+
+  // Polling fallback - only used when Realtime is not connected
+  useEffect(() => {
+    // Initial fetch
     fetchNextPopup();
 
-    // Poll for new popups every 8 seconds when tab is visible
-    // When tab is hidden, reduce polling to every 30 seconds to save resources
+    // If Realtime is connected, use minimal polling (30s) as backup
+    // If Realtime is not connected, use more frequent polling (8s visible, 30s hidden)
     let interval: NodeJS.Timeout;
 
     const handleVisibilityChange = () => {
@@ -63,18 +179,29 @@ export function PopupSystem() {
         clearInterval(interval);
         interval = setInterval(fetchNextPopup, 30000); // 30 seconds when hidden
       } else {
-        // Tab is visible - increase polling frequency
+        // Tab is visible
         clearInterval(interval);
         fetchNextPopup(); // Check immediately when tab becomes visible
-        interval = setInterval(fetchNextPopup, 8000); // 8 seconds when visible
+        if (realtimeConnected) {
+          // Realtime connected - use minimal polling as backup (30s)
+          interval = setInterval(fetchNextPopup, 30000);
+        } else {
+          // Realtime not connected - use frequent polling (8s)
+          interval = setInterval(fetchNextPopup, 8000);
+        }
       }
     };
 
-    // Set initial interval based on visibility
+    // Set initial interval based on visibility and Realtime status
     if (document.hidden) {
       interval = setInterval(fetchNextPopup, 30000);
     } else {
-      interval = setInterval(fetchNextPopup, 8000);
+      fetchNextPopup(); // Initial fetch
+      if (realtimeConnected) {
+        interval = setInterval(fetchNextPopup, 30000);
+      } else {
+        interval = setInterval(fetchNextPopup, 8000);
+      }
     }
 
     // Listen for visibility changes
@@ -84,7 +211,7 @@ export function PopupSystem() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [realtimeConnected]);
 
   function playPingSound() {
     try {
@@ -280,6 +407,7 @@ export function PopupSystem() {
       }
 
       // Dispatch custom event to trigger refreshes after snooze
+      // The reminder detail page already listens to this event and will update accordingly
       if (
         actionType === "SNOOZE" &&
         currentPopup?.reminder_id &&
@@ -290,15 +418,7 @@ export function PopupSystem() {
             detail: { reminderId: currentPopup.reminder_id },
           })
         );
-
-        // Also refresh if on reminder detail page
-        if (
-          window.location.pathname.includes("/reminder/") &&
-          window.location.pathname.includes(currentPopup.reminder_id)
-        ) {
-          // Trigger a soft refresh by reloading the page
-          window.location.reload();
-        }
+        // No need to reload - the reminder detail page listens to this event
       }
 
       toast.success("Done");
