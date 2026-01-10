@@ -7,7 +7,6 @@ import { SidebarProvider } from '@/components/ui/sidebar'
 import { SidebarInset } from '@/components/ui/sidebar'
 import { DashboardSidebar } from './sidebar'
 import { DashboardHeader } from '@/components/header'
-import { PopupSystem } from '@/components/popup-system'
 
 export default function DashboardLayout({
   children,
@@ -70,7 +69,6 @@ export default function DashboardLayout({
           <main className="flex-1 overflow-auto ">{children}</main>
         </div>
       </SidebarInset>
-      <PopupSystem />
     </SidebarProvider>
   )
 }
