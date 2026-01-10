@@ -19,7 +19,6 @@ import { getUserPreferences } from "@/lib/user-preferences";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-
 // Snooze a reminder by adding time to it
 export async function POST(
   request: Request,
@@ -77,7 +76,12 @@ export async function POST(
     let newTime: Date;
     let originalTime: Date | null = null;
     let wasAdjusted = false;
-    let adjustmentReason: "working_hours" | "quiet_hours" | "weekend" | "daily_cap" | null = null;
+    let adjustmentReason:
+      | "working_hours"
+      | "quiet_hours"
+      | "weekend"
+      | "daily_cap"
+      | null = null;
 
     if (scheduled_time) {
       // Use provided scheduled time
@@ -104,7 +108,9 @@ export async function POST(
     if (todayCount >= prefs.max_reminders_per_day) {
       // Defer to next day
       newTime = getNextWorkingDay(newTime, prefs, timezone);
-      const [startHour, startMin] = prefs.working_hours_start.split(":").map(Number);
+      const [startHour, startMin] = prefs.working_hours_start
+        .split(":")
+        .map(Number);
       newTime.setHours(startHour, startMin, 0, 0);
       wasAdjusted = true;
       adjustmentReason = "daily_cap";
@@ -129,10 +135,16 @@ export async function POST(
       newTime.toLocaleString("en-US", { timeZone: timezone })
     );
     const newDayOfWeek = newTimeInTZ.getDay();
-    
-    if (!prefs.working_days.includes(newDayOfWeek) && !prefs.allow_weekends && isWeekend(newTime, timezone)) {
+
+    if (
+      !prefs.working_days.includes(newDayOfWeek) &&
+      !prefs.allow_weekends &&
+      isWeekend(newTime, timezone)
+    ) {
       newTime = getNextWorkingDay(newTime, prefs, timezone);
-      const [startHour, startMin] = prefs.working_hours_start.split(":").map(Number);
+      const [startHour, startMin] = prefs.working_hours_start
+        .split(":")
+        .map(Number);
       newTime.setHours(startHour, startMin, 0, 0);
       wasAdjusted = true;
       adjustmentReason = adjustmentReason || "weekend";
@@ -258,14 +270,19 @@ export async function POST(
         : process.env.NEXT_PUBLIC_APP_URL;
 
     // Schedule or reschedule QStash job if reminder is not completed
-    if (process.env.QSTASH_TOKEN && appUrl && updatedReminder.status !== "sent" && updatedReminder.status !== "completed") {
+    if (
+      process.env.QSTASH_TOKEN &&
+      appUrl &&
+      updatedReminder.status !== "sent" &&
+      updatedReminder.status !== "completed"
+    ) {
       try {
         const now = new Date();
-        
+
         // Only schedule if the new time is in the future
         if (newTime > now) {
           let newQstashMessageId: string;
-          
+
           if (reminder.qstash_message_id) {
             // Reschedule existing job
             newQstashMessageId = await rescheduleReminder(
@@ -284,7 +301,7 @@ export async function POST(
               callbackUrl: `${appUrl}/api/reminders/send`,
             });
           }
-          
+
           // Update reminder with QStash message ID
           await supabase
             .from("reminders")
@@ -297,7 +314,10 @@ export async function POST(
           );
         }
       } catch (qstashError) {
-        console.error("QStash scheduling/rescheduling failed (non-fatal):", qstashError);
+        console.error(
+          "QStash scheduling/rescheduling failed (non-fatal):",
+          qstashError
+        );
         // Don't throw - allow the snooze to succeed even if QStash fails
         // The reminder will still be updated in the database
       }
