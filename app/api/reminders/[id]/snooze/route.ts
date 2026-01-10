@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { rescheduleReminder } from "@/lib/qstash";
+import { rescheduleReminder, scheduleReminder } from "@/lib/qstash";
 import { logEvent } from "@/lib/events";
 import { logSnooze } from "@/lib/smart-snooze";
 import { processEventForTriggers } from "@/lib/trigger-manager";
@@ -241,23 +241,49 @@ export async function POST(
         ? process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         : process.env.NEXT_PUBLIC_APP_URL;
 
-    if (reminder.qstash_message_id && process.env.QSTASH_TOKEN && appUrl) {
+    // Schedule or reschedule QStash job if reminder is not completed
+    if (process.env.QSTASH_TOKEN && appUrl && updatedReminder.status !== "sent" && updatedReminder.status !== "completed") {
       try {
-        const newQstashMessageId = await rescheduleReminder(
-          reminder.qstash_message_id,
-          {
-            reminderId: updatedReminder.id,
-            remindAt: newTime,
-            callbackUrl: `${appUrl}/api/reminders/send`,
+        const now = new Date();
+        
+        // Only schedule if the new time is in the future
+        if (newTime > now) {
+          let newQstashMessageId: string;
+          
+          if (reminder.qstash_message_id) {
+            // Reschedule existing job
+            newQstashMessageId = await rescheduleReminder(
+              reminder.qstash_message_id,
+              {
+                reminderId: updatedReminder.id,
+                remindAt: newTime,
+                callbackUrl: `${appUrl}/api/reminders/send`,
+              }
+            );
+          } else {
+            // Schedule new job if one doesn't exist
+            newQstashMessageId = await scheduleReminder({
+              reminderId: updatedReminder.id,
+              remindAt: newTime,
+              callbackUrl: `${appUrl}/api/reminders/send`,
+            });
           }
-        );
-        await supabase
-          .from("reminders")
-          .update({ qstash_message_id: newQstashMessageId })
-          .eq("id", updatedReminder.id)
-          .eq("user_id", user.id);
+          
+          // Update reminder with QStash message ID
+          await supabase
+            .from("reminders")
+            .update({ qstash_message_id: newQstashMessageId })
+            .eq("id", updatedReminder.id)
+            .eq("user_id", user.id);
+        } else {
+          console.warn(
+            `Cannot schedule snoozed reminder in the past: ${newTime.toISOString()}`
+          );
+        }
       } catch (qstashError) {
-        console.error("QStash rescheduling failed (non-fatal):", qstashError);
+        console.error("QStash scheduling/rescheduling failed (non-fatal):", qstashError);
+        // Don't throw - allow the snooze to succeed even if QStash fails
+        // The reminder will still be updated in the database
       }
     }
 

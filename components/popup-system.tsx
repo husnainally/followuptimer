@@ -33,9 +33,38 @@ export function PopupSystem() {
 
   useEffect(() => {
     fetchNextPopup();
-    // Poll for new popups every 8 seconds for better responsiveness
-    const interval = setInterval(fetchNextPopup, 8000);
-    return () => clearInterval(interval);
+    
+    // Poll for new popups every 8 seconds when tab is visible
+    // When tab is hidden, reduce polling to every 30 seconds to save resources
+    let interval: NodeJS.Timeout;
+    
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab is hidden - reduce polling frequency
+        clearInterval(interval);
+        interval = setInterval(fetchNextPopup, 30000); // 30 seconds when hidden
+      } else {
+        // Tab is visible - increase polling frequency
+        clearInterval(interval);
+        fetchNextPopup(); // Check immediately when tab becomes visible
+        interval = setInterval(fetchNextPopup, 8000); // 8 seconds when visible
+      }
+    };
+    
+    // Set initial interval based on visibility
+    if (document.hidden) {
+      interval = setInterval(fetchNextPopup, 30000);
+    } else {
+      interval = setInterval(fetchNextPopup, 8000);
+    }
+    
+    // Listen for visibility changes
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   async function fetchNextPopup() {
