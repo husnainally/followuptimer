@@ -40,6 +40,7 @@ export function PopupSystem() {
   const [userId, setUserId] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const currentPopupRef = useRef<PopupData | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Track if we've already played sound for this popup to avoid duplicates
   const [playedSoundForPopup, setPlayedSoundForPopup] = useState<string | null>(null);
@@ -48,6 +49,69 @@ export function PopupSystem() {
   useEffect(() => {
     currentPopupRef.current = currentPopup;
   }, [currentPopup]);
+
+  // Initialize AudioContext on first user interaction (required for autoplay policies)
+  // This ensures sound can play even when tab is in background
+  useEffect(() => {
+    // Resume on any user interaction to unlock audio (required by browsers)
+    // Keep listeners active (not once) so audio can be resumed anytime
+    const resumeAudio = async () => {
+      if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+        try {
+          await audioContextRef.current.resume();
+        } catch (error) {
+          // Silently fail - user interaction may be required
+        }
+      }
+    };
+
+    const initAudioContext = async () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextClass) {
+          return; // Audio not supported
+        }
+
+        // Create persistent audio context
+        const audioContext = new AudioContextClass();
+        audioContextRef.current = audioContext;
+
+        // Try to resume on various user interactions
+        // Use passive listeners for better performance
+        const events = ["click", "touchstart", "keydown", "mousedown"];
+        events.forEach((event) => {
+          document.addEventListener(event, resumeAudio, { passive: true });
+        });
+
+        // Also try to resume immediately if possible
+        if (audioContext.state === "suspended") {
+          audioContext.resume().catch(() => {
+            // Will be resumed on next user interaction
+          });
+        }
+      } catch (error) {
+        console.error("Failed to initialize audio context:", error);
+      }
+    };
+
+    initAudioContext();
+
+    return () => {
+      // Clean up event listeners (use the same resumeAudio function reference)
+      const events = ["click", "touchstart", "keydown", "mousedown"];
+      events.forEach((event) => {
+        document.removeEventListener(event, resumeAudio);
+      });
+
+      // Clean up audio context on unmount
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {
+          // Ignore cleanup errors
+        });
+        audioContextRef.current = null;
+      }
+    };
+  }, []);
 
   // Play ping sound when popup appears
   useEffect(() => {
@@ -213,23 +277,36 @@ export function PopupSystem() {
     };
   }, [realtimeConnected]);
 
-  function playPingSound() {
+  async function playPingSound() {
     try {
-      // Check if AudioContext is available
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioContextClass) {
-        return; // Audio not supported
+      // Use persistent audio context or create one if needed
+      let audioContext = audioContextRef.current;
+
+      if (!audioContext) {
+        // Fallback: create new context if persistent one doesn't exist
+        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextClass) {
+          return; // Audio not supported
+        }
+        audioContext = new AudioContextClass();
+        audioContextRef.current = audioContext;
       }
 
-      // Create audio context (may need user interaction first due to autoplay policies)
-      const audioContext = new AudioContextClass();
-      
-      // Resume audio context if suspended (required for autoplay policies)
+      // Always resume audio context - this is critical for background tabs
+      // The context may be suspended when tab is in background
       if (audioContext.state === "suspended") {
-        audioContext.resume().catch(() => {
-          // Silently fail if user interaction is required
+        try {
+          await audioContext.resume();
+        } catch (error) {
+          // If resume fails, sound won't play (user interaction may be required)
+          // This is expected behavior for some browsers
           return;
-        });
+        }
+      }
+
+      // Ensure context is running
+      if (audioContext.state !== "running") {
+        return; // Can't play sound if context isn't running
       }
       
       // Create oscillator for the ping sound
@@ -247,23 +324,25 @@ export function PopupSystem() {
       oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.15);
       
       // Volume envelope: quick attack, smooth decay
+      // Slightly louder for background tabs (0.3 instead of 0.25)
       gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.25, audioContext.currentTime + 0.02); // Quick attack
+      gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.02); // Quick attack
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2); // Smooth decay
       
       // Play the sound
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.25); // Stop after 250ms
       
-      // Clean up
+      // Clean up oscillator (but keep audio context alive)
       oscillator.onended = () => {
-        audioContext.close().catch(() => {
-          // Ignore cleanup errors
-        });
+        // Don't close the audio context - keep it alive for future sounds
+        oscillator.disconnect();
+        gainNode.disconnect();
       };
     } catch (error) {
       // Silently fail if audio context is not available (e.g., autoplay restrictions)
       // This is non-critical functionality
+      console.debug("Failed to play ping sound:", error);
     }
   }
 
