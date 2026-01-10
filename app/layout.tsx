@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { PopupSystem } from "@/components/popup-system";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({
         <ServiceWorkerRegister />
         {children}
         <Toaster position="bottom-right" closeButton={false} />
+        <PopupSystem />
       </body>
     </html>
   );

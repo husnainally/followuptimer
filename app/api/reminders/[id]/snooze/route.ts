@@ -179,8 +179,10 @@ export async function POST(
     );
 
     // Determine status: if rescheduled to future, set to "pending", otherwise keep as "snoozed"
+    // If the new time is in the future, it should be "pending" (ready to be sent)
+    // If the new time is in the past or same as now, keep as "snoozed" (temporary delay)
     const now = new Date();
-    const shouldBePending = newTime > now && calculatedMinutes > 0;
+    const shouldBePending = newTime > now;
 
     // Update reminder
     const { data: updatedReminder, error: updateError } = await supabase
