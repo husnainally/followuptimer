@@ -171,12 +171,16 @@ export async function POST(
       (newTime.getTime() - new Date(reminder.remind_at).getTime()) / 60000
     );
 
+    // Determine status: if rescheduled to future, set to "pending", otherwise keep as "snoozed"
+    const now = new Date();
+    const shouldBePending = newTime > now && calculatedMinutes > 0;
+
     // Update reminder
     const { data: updatedReminder, error: updateError } = await supabase
       .from("reminders")
       .update({
         remind_at: newTime.toISOString(),
-        status: "snoozed",
+        status: shouldBePending ? "pending" : "snoozed",
       })
       .eq("id", id)
       .eq("user_id", user.id)
@@ -185,7 +189,7 @@ export async function POST(
 
     if (updateError) throw updateError;
 
-    // Log reminder_snoozed event
+    // Log reminder_snoozed event (this appears in history)
     const eventResult = await logEvent({
       userId: user.id,
       eventType: "reminder_snoozed",
@@ -197,10 +201,13 @@ export async function POST(
         is_smart_suggestion: is_smart_suggestion,
         was_adjusted: wasAdjusted,
         adjustment_reason: adjustmentReason,
+        scheduled_time: newTime.toISOString(),
+        status_changed_to: shouldBePending ? "pending" : "snoozed",
       },
       source: "app",
       reminderId: id,
       contactId: reminder.contact_id || undefined,
+      useServiceClient: true, // Ensure event is saved properly
     });
 
     // Process event for triggers (repeated snooze detection)
