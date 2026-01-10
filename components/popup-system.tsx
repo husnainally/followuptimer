@@ -35,6 +35,21 @@ export function PopupSystem() {
     "entering"
   );
 
+  // Track if we've already played sound for this popup to avoid duplicates
+  const [playedSoundForPopup, setPlayedSoundForPopup] = useState<string | null>(null);
+
+  // Play ping sound when popup appears
+  useEffect(() => {
+    if (currentPopup && uiState === "entering" && playedSoundForPopup !== currentPopup.id) {
+      playPingSound();
+      setPlayedSoundForPopup(currentPopup.id);
+    }
+    // Reset when popup is dismissed
+    if (!currentPopup) {
+      setPlayedSoundForPopup(null);
+    }
+  }, [currentPopup, uiState, playedSoundForPopup]);
+
   useEffect(() => {
     fetchNextPopup();
 
@@ -70,6 +85,60 @@ export function PopupSystem() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
+
+  function playPingSound() {
+    try {
+      // Check if AudioContext is available
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) {
+        return; // Audio not supported
+      }
+
+      // Create audio context (may need user interaction first due to autoplay policies)
+      const audioContext = new AudioContextClass();
+      
+      // Resume audio context if suspended (required for autoplay policies)
+      if (audioContext.state === "suspended") {
+        audioContext.resume().catch(() => {
+          // Silently fail if user interaction is required
+          return;
+        });
+      }
+      
+      // Create oscillator for the ping sound
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      // Connect nodes
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Configure ping sound: pleasant notification tone
+      // Start at 800Hz, drop to 600Hz for a pleasant "ping" sound
+      oscillator.type = "sine"; // Smooth sine wave
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.15);
+      
+      // Volume envelope: quick attack, smooth decay
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.25, audioContext.currentTime + 0.02); // Quick attack
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2); // Smooth decay
+      
+      // Play the sound
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.25); // Stop after 250ms
+      
+      // Clean up
+      oscillator.onended = () => {
+        audioContext.close().catch(() => {
+          // Ignore cleanup errors
+        });
+      };
+    } catch (error) {
+      // Silently fail if audio context is not available (e.g., autoplay restrictions)
+      // This is non-critical functionality
+    }
+  }
 
   async function fetchNextPopup() {
     try {
