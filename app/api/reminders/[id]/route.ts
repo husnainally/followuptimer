@@ -203,26 +203,52 @@ export async function PATCH(
         ? process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         : process.env.NEXT_PUBLIC_APP_URL;
 
+    // Only reschedule if remind_at changed and reminder is not completed/sent
     if (
       remind_at !== undefined &&
-      reminder.qstash_message_id &&
       process.env.QSTASH_TOKEN &&
-      appUrl
+      appUrl &&
+      reminder.status !== "sent" &&
+      reminder.status !== "completed"
     ) {
       try {
-        await cancelScheduledReminder(reminder.qstash_message_id);
-        const newQstashMessageId = await scheduleReminder({
-          reminderId: reminder.id,
-          remindAt: new Date(reminder.remind_at),
-          callbackUrl: `${appUrl}/api/reminders/send`,
-        });
-        await supabase
-          .from("reminders")
-          .update({ qstash_message_id: newQstashMessageId })
-          .eq("id", reminder.id)
-          .eq("user_id", user.id);
+        const newRemindAt = new Date(reminder.remind_at);
+        const now = new Date();
+        
+        // Only schedule if the time is in the future
+        if (newRemindAt > now) {
+          // Cancel existing job if it exists
+          if (reminder.qstash_message_id) {
+            await cancelScheduledReminder(reminder.qstash_message_id).catch(
+              (err) => {
+                console.warn("Failed to cancel existing QStash job:", err);
+                // Continue anyway - we'll create a new one
+              }
+            );
+          }
+          
+          // Schedule new job
+          const newQstashMessageId = await scheduleReminder({
+            reminderId: reminder.id,
+            remindAt: newRemindAt,
+            callbackUrl: `${appUrl}/api/reminders/send`,
+          });
+          
+          // Update reminder with new QStash message ID
+          await supabase
+            .from("reminders")
+            .update({ qstash_message_id: newQstashMessageId })
+            .eq("id", reminder.id)
+            .eq("user_id", user.id);
+        } else {
+          console.warn(
+            `Cannot schedule reminder in the past: ${newRemindAt.toISOString()}`
+          );
+        }
       } catch (qstashError) {
         console.error("QStash rescheduling failed (non-fatal):", qstashError);
+        // Don't throw - allow the reminder update to succeed even if QStash fails
+        // The reminder will still be updated in the database
       }
     }
 

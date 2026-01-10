@@ -315,7 +315,7 @@ export async function POST(
         .eq("user_id", user.id);
 
       // Trigger snooze API for reminder scheduling
-      await fetch(
+      const snoozeResponse = await fetch(
         `${
           process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         }/api/reminders/${popup.reminder_id}/snooze`,
@@ -331,6 +331,24 @@ export async function POST(
           }),
         }
       );
+
+      if (!snoozeResponse.ok) {
+        const errorData = await snoozeResponse.json().catch(() => ({}));
+        console.error("Failed to snooze reminder:", {
+          reminderId: popup.reminder_id,
+          status: snoozeResponse.status,
+          error: errorData.error || "Unknown error",
+        });
+        throw new Error(
+          errorData.error || `Failed to snooze reminder: ${snoozeResponse.statusText}`
+        );
+      }
+
+      const snoozeResult = await snoozeResponse.json().catch(() => ({}));
+      if (!snoozeResult.reminder) {
+        console.error("Snooze response missing reminder data:", snoozeResult);
+        throw new Error("Snooze succeeded but reminder data is missing");
+      }
 
       await logEvent({
         userId: user.id,
