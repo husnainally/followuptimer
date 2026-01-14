@@ -135,6 +135,12 @@
 ## 7. Performance & UX
 
 ### 7.1 Latency
+
+
+
+
+
+
 **What to Test:**
 - Popup appears within 3 seconds under normal conditions
 - UI remains responsive
