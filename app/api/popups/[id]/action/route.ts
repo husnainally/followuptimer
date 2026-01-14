@@ -141,38 +141,49 @@ export async function POST(
       (normalizedAction === "MARK_DONE" || normalizedAction === "COMPLETE") &&
       popup.reminder_id
     ) {
-      // Get reminder to check for contact_id
+      // Get reminder to check for contact_id and status
       const { data: reminder } = await supabase
         .from("reminders")
-        .select("contact_id")
+        .select("contact_id, status")
         .eq("id", popup.reminder_id)
         .single();
 
-      const now = new Date().toISOString();
-      const updateData: any = { status: "sent" };
-      
-      // If reminder has a contact, update last_interaction_at
-      if (reminder?.contact_id) {
-        updateData.last_interaction_at = now;
-        
-        // Update contact's updated_at as well
-        await supabase
-          .from("contacts")
-          .update({ updated_at: now })
-          .eq("id", reminder.contact_id);
-      }
-      
-      // Set completion_context if provided in action_data
-      if (action_data?.completion_context) {
-        updateData.completion_context = String(action_data.completion_context).trim();
-      }
-      
-      // Mark reminder as completed
-      await supabase
-        .from("reminders")
-        .update(updateData)
-        .eq("id", popup.reminder_id);
+      // Check if reminder is already completed (prevent duplicate updates)
+      const isAlreadyCompleted =
+        reminder?.status === "sent" || reminder?.status === "completed";
 
+      const now = new Date().toISOString();
+
+      // Mark reminder as completed (webhook no longer does this, only user interaction does)
+      if (!isAlreadyCompleted) {
+        const updateData: any = { status: "sent" };
+
+        // If reminder has a contact, update last_interaction_at
+        if (reminder?.contact_id) {
+          updateData.last_interaction_at = now;
+
+          // Update contact's updated_at as well
+          await supabase
+            .from("contacts")
+            .update({ updated_at: now })
+            .eq("id", reminder.contact_id);
+        }
+
+        // Set completion_context if provided in action_data
+        if (action_data?.completion_context) {
+          updateData.completion_context = String(
+            action_data.completion_context
+          ).trim();
+        }
+
+        // Mark reminder as completed
+        await supabase
+          .from("reminders")
+          .update(updateData)
+          .eq("id", popup.reminder_id);
+      }
+
+      // Always log task_completed (user action)
       await logEvent({
         userId: user.id,
         eventType: "task_completed",
@@ -185,21 +196,24 @@ export async function POST(
         useServiceClient: true,
       });
 
-      // Reminder already fetched above, reuse it
-
-      const eventResult = await logEvent({
-        userId: user.id,
-        eventType: "reminder_completed",
-        eventData: {
-          reminder_id: popup.reminder_id,
-        },
-        source: "app",
-        reminderId: popup.reminder_id,
-        contactId: reminder?.contact_id || undefined,
-      });
+      // Log reminder_completed event (only if not already completed to prevent duplicates)
+      let eventResult: { success: boolean; eventId?: string } | null = null;
+      if (!isAlreadyCompleted) {
+        eventResult = await logEvent({
+          userId: user.id,
+          eventType: "reminder_completed",
+          eventData: {
+            reminder_id: popup.reminder_id,
+          },
+          source: "app",
+          reminderId: popup.reminder_id,
+          contactId: reminder?.contact_id || undefined,
+        });
+      }
 
       // Update streak tracking (which will create streak_incremented trigger if needed)
-      if (eventResult.success && popup.reminder_id) {
+      // Only run if we logged a new reminder_completed event
+      if (eventResult?.success && popup.reminder_id) {
         const { updateStreakOnCompletion } = await import(
           "@/lib/streak-tracking"
         );

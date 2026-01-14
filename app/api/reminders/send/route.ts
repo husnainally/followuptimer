@@ -525,9 +525,10 @@ async function handler(request: Request) {
         .eq("id", reminder.contact_id);
     }
 
-    await supabase.from("reminders").update(updateData).eq("id", reminderId);
+    // Reminder status update removed - completion only happens when user clicks "Mark Done" in popup
 
-    // Log reminder_triggered event when reminder actually fires (before checking success)
+    // Log reminder_triggered event when reminder actually fires
+    // Note: reminder_completed event is only logged when user clicks "Mark Done" in popup
     await logEvent({
       userId: reminder.user_id,
       eventType: "reminder_triggered",
@@ -542,77 +543,6 @@ async function handler(request: Request) {
       contactId: reminder.contact_id || undefined,
       useServiceClient: true,
     });
-
-    // Log reminder_completed event when reminder is successfully sent
-    if (overallSuccess) {
-      // Record cooldown tracking
-      await recordCooldownTracking(
-        reminder.user_id,
-        reminderId,
-        reminder.contact_id
-      );
-
-      // Fetch contact name if contact_id exists
-      let contactName: string | undefined;
-      if (reminder.contact_id) {
-        const { data: contact } = await supabase
-          .from("contacts")
-          .select("name")
-          .eq("id", reminder.contact_id)
-          .single();
-        contactName = contact?.name;
-      }
-
-      const eventResult = await logEvent({
-        userId: reminder.user_id,
-        eventType: "reminder_completed",
-        eventData: {
-          reminder_id: reminderId,
-          notification_method: reminder.notification_method,
-          message: reminder.message,
-          contact_name: contactName,
-        },
-        source: "scheduler",
-        reminderId: reminderId,
-        contactId: reminder.contact_id || undefined,
-        useServiceClient: true,
-      });
-
-      // Update streak tracking (which will create streak_incremented trigger if needed)
-      if (eventResult.success) {
-        const { updateStreakOnCompletion } = await import(
-          "@/lib/streak-tracking"
-        );
-        await updateStreakOnCompletion(reminder.user_id, reminderId);
-
-        // Also process the reminder_completed event for any other triggers
-        const { processEventForTriggers } = await import(
-          "@/lib/trigger-manager"
-        );
-        await processEventForTriggers(
-          reminder.user_id,
-          "reminder_completed",
-          eventResult.eventId!,
-          { reminder_id: reminderId }
-        );
-
-        // Create popup from reminder_completed event
-        const { createPopupsFromEvent } = await import("@/lib/popup-engine");
-        await createPopupsFromEvent({
-          userId: reminder.user_id,
-          eventId: eventResult.eventId!,
-          eventType: "reminder_completed",
-          eventData: {
-            reminder_id: reminderId,
-            notification_method: reminder.notification_method,
-            message: reminder.message,
-            contact_name: contactName,
-          },
-          contactId: reminder.contact_id || undefined,
-          reminderId: reminderId,
-        });
-      }
-    }
 
     // Create popup from reminder_due event (for reminder_due popup rules)
     // This should happen regardless of notification success - popups show when reminder is due
