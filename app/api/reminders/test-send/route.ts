@@ -1,19 +1,18 @@
-import { createServiceClient } from "@/lib/supabase/service";
-import { NextResponse } from "next/server";
-import { sendReminderEmail } from "@/lib/email";
-import { generateAffirmation } from "@/lib/affirmations";
-import { sendPushNotification } from "@/lib/push-notification";
-import { createInAppNotification } from "@/lib/in-app-notification";
+import { createServiceClient } from '@/lib/supabase/service';
+import { NextResponse } from 'next/server';
+import { sendReminderEmail } from '@/lib/email';
+import { generateAffirmation } from '@/lib/affirmations';
+import { sendPushNotification } from '@/lib/push-notification';
+import { createInAppNotification } from '@/lib/in-app-notification';
 
 // Route segment config
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /**
  * Test endpoint to manually trigger reminder sending
  * Useful for testing notifications without waiting for QStash
- * 
+ *
  * Usage: POST /api/reminders/test-send
  * Body: { reminderId: "uuid" }
  */
@@ -24,7 +23,7 @@ export async function POST(request: Request) {
 
     if (!reminderId) {
       return NextResponse.json(
-        { error: "Reminder ID is required" },
+        { error: 'Reminder ID is required' },
         { status: 400 }
       );
     }
@@ -33,14 +32,14 @@ export async function POST(request: Request) {
 
     // Fetch reminder and user profile
     const { data: reminder, error: reminderError } = await supabase
-      .from("reminders")
-      .select("*, profiles:user_id(*)")
-      .eq("id", reminderId)
+      .from('reminders')
+      .select('*, profiles:user_id(*)')
+      .eq('id', reminderId)
       .single();
 
     if (reminderError || !reminder) {
       return NextResponse.json(
-        { error: "Reminder not found" },
+        { error: 'Reminder not found' },
         { status: 404 }
       );
     }
@@ -54,29 +53,33 @@ export async function POST(request: Request) {
     const pushEnabled = profile?.push_notifications ?? false;
     const inAppEnabled = profile?.in_app_notifications ?? false;
 
-    console.log("[Test Send] Notification preferences:", {
+    console.log('[Test Send] Notification preferences:', {
       email: emailEnabled,
       push: pushEnabled,
       inApp: inAppEnabled,
     });
 
-    const results: Array<{ method: string; success: boolean; error?: string }> = [];
+    const results: Array<{ method: string; success: boolean; error?: string }> =
+      [];
 
     // Send email if enabled
     if (emailEnabled && profile?.email) {
       try {
         await sendReminderEmail({
           to: profile.email,
-          subject: "⏰ Test Reminder from FollowUpTimer",
+          subject: '⏰ Test Reminder from FollowUpTimer',
           message: reminder.message,
           affirmation,
+          userId: reminder.user_id,
+          contactId: reminder.contact_id || undefined,
+          reminderId: reminder.id,
         });
-        results.push({ method: "email", success: true });
+        results.push({ method: 'email', success: true });
       } catch (error) {
         results.push({
-          method: "email",
+          method: 'email',
           success: false,
-          error: error instanceof Error ? error.message : "Email send failed",
+          error: error instanceof Error ? error.message : 'Email send failed',
         });
       }
     }
@@ -86,20 +89,20 @@ export async function POST(request: Request) {
       try {
         const pushResult = await sendPushNotification({
           userId: reminder.user_id,
-          title: "⏰ Test Reminder",
+          title: '⏰ Test Reminder',
           message: reminder.message,
           affirmation,
         });
         results.push({
-          method: "push",
+          method: 'push',
           success: pushResult.success,
           error: pushResult.success ? undefined : pushResult.message,
         });
       } catch (error) {
         results.push({
-          method: "push",
+          method: 'push',
           success: false,
-          error: error instanceof Error ? error.message : "Push send failed",
+          error: error instanceof Error ? error.message : 'Push send failed',
         });
       }
     }
@@ -110,21 +113,21 @@ export async function POST(request: Request) {
         const inAppResult = await createInAppNotification({
           userId: reminder.user_id,
           reminderId: reminder.id,
-          title: "⏰ Test Reminder",
+          title: '⏰ Test Reminder',
           message: reminder.message,
           affirmation,
           useServiceClient: true,
         });
         results.push({
-          method: "in_app",
+          method: 'in_app',
           success: inAppResult.success,
           error: inAppResult.success ? undefined : inAppResult.error,
         });
       } catch (error) {
         results.push({
-          method: "in_app",
+          method: 'in_app',
           success: false,
-          error: error instanceof Error ? error.message : "In-app send failed",
+          error: error instanceof Error ? error.message : 'In-app send failed',
         });
       }
     }
@@ -135,8 +138,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: anySuccess,
       message: allSuccess
-        ? "All notifications sent successfully"
-        : "Some notifications failed",
+        ? 'All notifications sent successfully'
+        : 'Some notifications failed',
       results,
       preferences: {
         email: emailEnabled,
@@ -145,13 +148,12 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("[Test Send] Error:", error);
+    console.error('[Test Send] Error:', error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Internal server error",
+        error: error instanceof Error ? error.message : 'Internal server error',
       },
       { status: 500 }
     );
   }
 }
-

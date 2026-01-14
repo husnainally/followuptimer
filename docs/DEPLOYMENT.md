@@ -44,12 +44,19 @@ QSTASH_NEXT_SIGNING_KEY=sig_...
 ### Resend (Required for Email Notifications)
 ```bash
 RESEND_API_KEY=re_...
+RESEND_FROM=FollowUpTimer <noreply@yourdomain.com>
+RESEND_WEBHOOK_SECRET=whsec_...
 ```
 
 **Where to find:**
 - Go to [Resend Dashboard](https://resend.com/api-keys)
 - Create new API key
 - Copy the key
+- **RESEND_FROM:** Use your verified domain (not `.vercel.app`)
+- **RESEND_WEBHOOK_SECRET:** Get from Resend Dashboard → Webhooks → Create Webhook
+  - Webhook URL: `https://your-app.vercel.app/api/webhooks/resend`
+  - Events: Select `email.opened`
+  - Copy the signing secret
 
 ### App URL (Required)
 ```bash
