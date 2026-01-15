@@ -24,6 +24,7 @@ import {
   User,
   StickyNote,
   Repeat,
+  Mail,
 } from "lucide-react";
 import { ControlledTextarea } from "@/components/controlled-textarea";
 import { toast } from "sonner";
@@ -48,6 +49,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { SendEmailDialog } from "@/components/contact/send-email-dialog";
 
 export default function ReminderDetailPage() {
   const router = useRouter();
@@ -67,7 +69,9 @@ export default function ReminderDetailPage() {
   const [suppressionDetails, setSuppressionDetails] = useState<any>(null);
   const [contactId, setContactId] = useState<string | null>(null);
   const [contactName, setContactName] = useState<string | null>(null);
+  const [contactEmail, setContactEmail] = useState<string | null>(null);
   const [addNoteDialogOpen, setAddNoteDialogOpen] = useState(false);
+  const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isCreatingFollowup, setIsCreatingFollowup] = useState(false);
@@ -143,12 +147,13 @@ export default function ReminderDetailPage() {
       // Store contact info if linked
       if (reminder?.contact_id) {
         setContactId(reminder.contact_id);
-        // Fetch contact name
+        // Fetch contact details including email
         fetch(`/api/contacts/${reminder.contact_id}`)
           .then((res) => res.json())
           .then((data) => {
             if (data.contact) {
               setContactName(data.contact.name);
+              setContactEmail(data.contact.email || null);
             }
           })
           .catch(() => {
@@ -157,6 +162,7 @@ export default function ReminderDetailPage() {
       } else {
         setContactId(null);
         setContactName(null);
+        setContactEmail(null);
       }
 
       // Fetch suppression details if status is suppressed
@@ -627,6 +633,17 @@ export default function ReminderDetailPage() {
                     View Contact: {contactName || "Contact"}
                   </Button>
                 </Link>
+                {contactEmail && (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                    onClick={() => setSendEmailDialogOpen(true)}
+                    aria-label="Send email to contact"
+                  >
+                    <Mail className="w-4 h-4" aria-hidden="true" />
+                    Send Email
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-2"
@@ -854,6 +871,39 @@ export default function ReminderDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Send Email Dialog */}
+      {contactId && contactEmail && (
+        <SendEmailDialog
+          open={sendEmailDialogOpen}
+          onOpenChange={setSendEmailDialogOpen}
+          contactId={contactId}
+          contactName={contactName || undefined}
+          contactEmail={contactEmail}
+          reminderId={reminderId}
+          defaultSubject={
+            form.watch("message")
+              ? `Re: ${form.watch("message").substring(0, 50)}`
+              : undefined
+          }
+          onSuccess={() => {
+            // Refresh contact info to get updated last_interaction_at
+            if (contactId) {
+              fetch(`/api/contacts/${contactId}`)
+                .then((res) => res.json())
+                .then((data) => {
+                  if (data.contact) {
+                    setContactName(data.contact.name);
+                    setContactEmail(data.contact.email || null);
+                  }
+                })
+                .catch(() => {
+                  // Fail silently
+                });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

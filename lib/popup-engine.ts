@@ -25,7 +25,8 @@ export type PopupTemplateKey =
   | "reminder_due"
   | "reminder_completed"
   | "no_reply_after_n_days"
-  | "manual_reminder_created";
+  | "manual_reminder_created"
+  | "reminder_created";
 
 export interface PopupRuleRow {
   id: string;
@@ -58,7 +59,8 @@ function isTriggerEventType(eventType: EventType): boolean {
     eventType === "reminder_due" ||
     eventType === "reminder_completed" ||
     eventType === "no_reply_after_n_days" ||
-    eventType === "manual_reminder_created"
+    eventType === "manual_reminder_created" ||
+    eventType === "reminder_created"
   );
 }
 
@@ -214,6 +216,13 @@ function buildTemplatePayload(args: {
         payload: basePayload,
       };
     }
+    case "reminder_created": {
+      return {
+        title: "Reminder set successfully",
+        message: "Your reminder has been set and will notify you at the scheduled time.",
+        payload: basePayload,
+      };
+    }
   }
 }
 
@@ -300,6 +309,18 @@ async function ensureDefaultPopupRules(userId: string): Promise<void> {
       cooldown_seconds: 60 * 5,
       max_per_day: 20,
       ttl_seconds: 60 * 60 * 24,
+      enabled: true,
+      conditions: { require_reminder_id: true },
+    },
+    {
+      user_id: userId,
+      rule_name: "Reminder created confirmation popup",
+      trigger_event_type: "reminder_created",
+      template_key: "reminder_created",
+      priority: 6,
+      cooldown_seconds: 60 * 2,
+      max_per_day: 50,
+      ttl_seconds: 60 * 5,
       enabled: true,
       conditions: { require_reminder_id: true },
     },

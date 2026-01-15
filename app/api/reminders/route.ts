@@ -128,6 +128,30 @@ export async function POST(request: Request) {
         eventResult.eventId,
         { reminder_id: reminder.id }
       );
+
+      // Create confirmation popup from reminder_created event (Step 2: Immediate confirmation)
+      try {
+        const { createPopupsFromEvent } = await import("@/lib/popup-engine");
+        await createPopupsFromEvent({
+          userId: user.id,
+          eventId: eventResult.eventId,
+          eventType: "reminder_created",
+          eventData: {
+            reminder_id: reminder.id,
+            message: reminder.message,
+            remind_at: reminder.remind_at,
+            notification_method: reminder.notification_method,
+          },
+          contactId: body.contact_id || undefined,
+          reminderId: reminder.id,
+        });
+      } catch (popupError) {
+        // Log but don't fail - popup creation is non-critical
+        console.warn(
+          "[Reminder Creation] Failed to create confirmation popup:",
+          popupError
+        );
+      }
     }
 
     // Schedule QStash job (if QSTASH_TOKEN is configured)
