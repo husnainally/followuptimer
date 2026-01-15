@@ -53,6 +53,7 @@ export function PopupSystem() {
     name?: string;
     email?: string;
   } | null>(null);
+  const fetchedContactIdRef = useRef<string | null>(null);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -547,27 +548,25 @@ export function PopupSystem() {
     }
   }
 
-  if (!currentPopup) return null;
-
-  const snoozeOptions = [
-    { label: "Snooze 1h", minutes: 60 },
-    { label: "Tomorrow", minutes: 60 * 24 },
-    { label: "Next week", minutes: 60 * 24 * 7 },
-  ];
-
-  // Don't show snooze for reminder_completed popups (reminder already sent)
-  const sourceEventType = (currentPopup.payload as Record<string, unknown>)
-    ?.source_event_type as string | undefined;
-  const isReminderCompleted = sourceEventType === "reminder_completed";
-  const isReminderDue = sourceEventType === "reminder_due";
-  const canSnooze = currentPopup.reminder_id && !isReminderCompleted;
-  
-  // Show send email button for reminder_due popups with contact_id
-  const canSendEmail = isReminderDue && currentPopup.contact_id;
-
   // Fetch contact info when popup has contact_id and we need to show send email
+  // This hook MUST be before any early returns to follow Rules of Hooks
   useEffect(() => {
-    if (canSendEmail && currentPopup.contact_id && !contactInfo) {
+    // Reset contact info when popup is cleared or doesn't have contact_id
+    if (!currentPopup || !currentPopup.contact_id) {
+      setContactInfo(null);
+      fetchedContactIdRef.current = null;
+      return;
+    }
+
+    // Check if this is a reminder_due popup with contact_id
+    const sourceEventType = (currentPopup.payload as Record<string, unknown>)
+      ?.source_event_type as string | undefined;
+    const isReminderDue = sourceEventType === "reminder_due";
+    const canSendEmail = isReminderDue && currentPopup.contact_id;
+
+    // Fetch contact info if needed (only if we haven't fetched for this contact_id yet)
+    if (canSendEmail && fetchedContactIdRef.current !== currentPopup.contact_id) {
+      fetchedContactIdRef.current = currentPopup.contact_id;
       const supabase = createClient();
       void (async () => {
         try {
@@ -592,12 +591,30 @@ export function PopupSystem() {
           // Fail silently
         }
       })();
-    }
-    // Reset contact info when popup changes
-    if (!currentPopup || !currentPopup.contact_id) {
+    } else if (!canSendEmail) {
+      // Reset contact info if canSendEmail becomes false
       setContactInfo(null);
+      fetchedContactIdRef.current = null;
     }
-  }, [currentPopup, canSendEmail, contactInfo]);
+  }, [currentPopup]);
+
+  if (!currentPopup) return null;
+
+  const snoozeOptions = [
+    { label: "Snooze 1h", minutes: 60 },
+    { label: "Tomorrow", minutes: 60 * 24 },
+    { label: "Next week", minutes: 60 * 24 * 7 },
+  ];
+
+  // Don't show snooze for reminder_completed popups (reminder already sent)
+  const sourceEventType = (currentPopup.payload as Record<string, unknown>)
+    ?.source_event_type as string | undefined;
+  const isReminderCompleted = sourceEventType === "reminder_completed";
+  const isReminderDue = sourceEventType === "reminder_due";
+  const canSnooze = currentPopup.reminder_id && !isReminderCompleted;
+  
+  // Show send email button for reminder_due popups with contact_id
+  const canSendEmail = isReminderDue && currentPopup.contact_id;
 
   return (
     <div
