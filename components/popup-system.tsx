@@ -569,12 +569,14 @@ export function PopupSystem() {
   useEffect(() => {
     if (canSendEmail && currentPopup.contact_id && !contactInfo) {
       const supabase = createClient();
-      supabase
-        .from('contacts')
-        .select('id, name, first_name, last_name, email')
-        .eq('id', currentPopup.contact_id)
-        .single()
-        .then(({ data, error }) => {
+      void (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('contacts')
+            .select('id, name, first_name, last_name, email')
+            .eq('id', currentPopup.contact_id)
+            .single();
+          
           if (!error && data) {
             const name =
               data.name ||
@@ -586,10 +588,10 @@ export function PopupSystem() {
               email: data.email || undefined,
             });
           }
-        })
-        .catch(() => {
+        } catch {
           // Fail silently
-        });
+        }
+      })();
     }
     // Reset contact info when popup changes
     if (!currentPopup || !currentPopup.contact_id) {

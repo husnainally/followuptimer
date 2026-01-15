@@ -87,9 +87,9 @@ export async function POST(
       reminderId: reminder_id || undefined,
     });
 
-    if (emailResult.error) {
+    if (!emailResult.success || emailResult.error) {
       return NextResponse.json(
-        { error: emailResult.error.message || 'Failed to send email' },
+        { error: emailResult.error?.message || 'Failed to send email' },
         { status: 500 }
       );
     }
