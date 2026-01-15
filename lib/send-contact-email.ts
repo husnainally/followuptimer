@@ -24,7 +24,11 @@ export async function sendContactEmail({
   userId,
   contactId,
   reminderId,
-}: SendContactEmailOptions) {
+}: SendContactEmailOptions): Promise<{
+  success: boolean;
+  data: { id: string } | null;
+  error: { message: string } | null;
+}> {
   try {
     // Check if Resend API key is configured
     if (!process.env.RESEND_API_KEY) {
@@ -91,7 +95,7 @@ export async function sendContactEmail({
       }
     }
 
-    return result;
+    return { success: true, data: result.data, error: null };
   } catch (error) {
     console.error('[Contact Email] Error sending email:', {
       error,
@@ -100,7 +104,13 @@ export async function sendContactEmail({
       contactId,
       hasApiKey: !!process.env.RESEND_API_KEY,
     });
-    throw error;
+    const errorMessage =
+      error instanceof Error ? error.message : 'Failed to send email';
+    return {
+      success: false,
+      data: null,
+      error: { message: errorMessage },
+    };
   }
 }
 
