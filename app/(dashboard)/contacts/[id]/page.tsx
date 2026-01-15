@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RemindersTable } from "@/app/(dashboard)/reminders-table";
 import { format } from "date-fns";
 import { ContactHistory } from "@/components/contact/contact-history";
+import { SendEmailDialog } from "@/components/contact/send-email-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +65,7 @@ export default function ContactDetailPage() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [availableContacts, setAvailableContacts] = useState<Contact[]>([]);
   const [selectedContactId, setSelectedContactId] = useState<string>("");
   const [isMerging, setIsMerging] = useState(false);
@@ -216,6 +218,16 @@ export default function ContactDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {contact.email && (
+            <Button
+              variant="default"
+              onClick={() => setSendEmailDialogOpen(true)}
+              className="gap-2"
+            >
+              <Mail className="w-4 h-4" />
+              Send Email
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => {
@@ -365,6 +377,25 @@ export default function ContactDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Send Email Dialog */}
+      {contact.email && (
+        <SendEmailDialog
+          open={sendEmailDialogOpen}
+          onOpenChange={setSendEmailDialogOpen}
+          contactId={contact.id}
+          contactName={
+            contact.first_name && contact.last_name
+              ? `${contact.first_name} ${contact.last_name}`
+              : contact.first_name || contact.name
+          }
+          contactEmail={contact.email}
+          onSuccess={() => {
+            // Refresh contact to get updated last_interaction_at
+            fetchContact();
+          }}
+        />
+      )}
     </div>
   );
 }

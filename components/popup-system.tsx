@@ -5,6 +5,7 @@ import { Popup, type PopupTemplateType } from "@/components/ui/popup";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { SendEmailDialog } from "@/components/contact/send-email-dialog";
 
 interface PopupData {
   id: string;
@@ -44,6 +45,14 @@ export function PopupSystem() {
 
   // Track if we've already played sound for this popup to avoid duplicates
   const [playedSoundForPopup, setPlayedSoundForPopup] = useState<string | null>(null);
+  
+  // Send email dialog state
+  const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [contactInfo, setContactInfo] = useState<{
+    id: string;
+    name?: string;
+    email?: string;
+  } | null>(null);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -550,7 +559,43 @@ export function PopupSystem() {
   const sourceEventType = (currentPopup.payload as Record<string, unknown>)
     ?.source_event_type as string | undefined;
   const isReminderCompleted = sourceEventType === "reminder_completed";
+  const isReminderDue = sourceEventType === "reminder_due";
   const canSnooze = currentPopup.reminder_id && !isReminderCompleted;
+  
+  // Show send email button for reminder_due popups with contact_id
+  const canSendEmail = isReminderDue && currentPopup.contact_id;
+
+  // Fetch contact info when popup has contact_id and we need to show send email
+  useEffect(() => {
+    if (canSendEmail && currentPopup.contact_id && !contactInfo) {
+      const supabase = createClient();
+      supabase
+        .from('contacts')
+        .select('id, name, first_name, last_name, email')
+        .eq('id', currentPopup.contact_id)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            const name =
+              data.name ||
+              `${data.first_name || ''} ${data.last_name || ''}`.trim() ||
+              undefined;
+            setContactInfo({
+              id: data.id,
+              name,
+              email: data.email || undefined,
+            });
+          }
+        })
+        .catch(() => {
+          // Fail silently
+        });
+    }
+    // Reset contact info when popup changes
+    if (!currentPopup || !currentPopup.contact_id) {
+      setContactInfo(null);
+    }
+  }, [currentPopup, canSendEmail, contactInfo]);
 
   return (
     <div
@@ -662,8 +707,27 @@ export function PopupSystem() {
                   currentPopup.action_data
                 )
         }
+        onSendEmail={
+          canSendEmail && contactInfo?.email
+            ? () => setSendEmailDialogOpen(true)
+            : undefined
+        }
         onDismiss={() => handleDismiss(currentPopup.id)}
       />
+      {canSendEmail && contactInfo && (
+        <SendEmailDialog
+          open={sendEmailDialogOpen}
+          onOpenChange={setSendEmailDialogOpen}
+          contactId={contactInfo.id}
+          contactName={contactInfo.name}
+          contactEmail={contactInfo.email}
+          reminderId={currentPopup.reminder_id || undefined}
+          onSuccess={() => {
+            // Refresh or update UI if needed
+            fetchNextPopup();
+          }}
+        />
+      )}
     </div>
   );
 }

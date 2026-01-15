@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { X, Check, Clock, ArrowRight } from "lucide-react";
+import { X, Check, Clock, ArrowRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,7 @@ export interface PopupProps {
     adjusted: boolean;
   }>;
   onMarkDone?: () => void;
+  onSendEmail?: () => void;
   onDismiss?: () => void;
   isLoading?: boolean;
   className?: string;
@@ -73,6 +74,7 @@ export function Popup({
   snoozeOptions,
   snoozeCandidates,
   onMarkDone,
+  onSendEmail,
   onDismiss,
   isLoading,
   className,
@@ -188,6 +190,12 @@ export function Popup({
             <Button size="sm" variant="outline" onClick={onMarkDone} disabled={isLoading}>
               <Check className="h-4 w-4 mr-2" />
               Mark done
+            </Button>
+          )}
+          {onSendEmail && (
+            <Button size="sm" variant="outline" onClick={onSendEmail} disabled={isLoading}>
+              <Mail className="h-4 w-4 mr-2" />
+              Send Email
             </Button>
           )}
         </div>
