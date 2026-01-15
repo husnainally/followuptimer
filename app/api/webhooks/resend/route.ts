@@ -16,12 +16,17 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * Verify Resend webhook signature
- * Resend signs webhooks with HMAC SHA256
+ * Verify Resend webhook signature (Svix format)
+ * Resend uses Svix for webhook delivery, which uses HMAC SHA256 with Base64 encoding
+ * 
+ * Signature format:
+ * - Headers: svix-id, svix-timestamp, svix-signature
+ * - Signed content: {svix-id}.{svix-timestamp}.{raw_body}
+ * - Secret format: whsec_<base64-key> (need to extract and decode the key part)
  */
 async function verifyWebhookSignature(
   body: string,
-  signature: string | null
+  headers: Headers
 ): Promise<boolean> {
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
 
@@ -33,53 +38,91 @@ async function verifyWebhookSignature(
     return process.env.NODE_ENV !== 'production';
   }
 
-  if (!signature) {
-    console.error('[Resend Webhook] No signature provided');
+  const svixId = headers.get('svix-id');
+  const svixTimestamp = headers.get('svix-timestamp');
+  const svixSignature = headers.get('svix-signature');
+
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    console.error('[Resend Webhook] Missing required Svix headers:', {
+      hasId: !!svixId,
+      hasTimestamp: !!svixTimestamp,
+      hasSignature: !!svixSignature,
+    });
     return false;
   }
 
   try {
-    // Resend sends signature in format: "t=timestamp,v1=signature"
-    const parts = signature.split(',');
-    const timestampPart = parts.find((p) => p.startsWith('t='));
-    const signaturePart = parts.find((p) => p.startsWith('v1='));
-
-    if (!timestampPart || !signaturePart) {
-      console.error('[Resend Webhook] Invalid signature format');
-      return false;
+    // Step 1: Extract and decode the secret key
+    // Secret format: whsec_<base64-key>
+    let secretKey: Buffer;
+    if (webhookSecret.startsWith('whsec_')) {
+      const keyB64 = webhookSecret.substring(6); // Remove 'whsec_' prefix
+      try {
+        secretKey = Buffer.from(keyB64, 'base64');
+        console.log('[Resend Webhook] Using whsec_ format secret (decoded from base64)');
+      } catch (error) {
+        console.error('[Resend Webhook] Failed to decode secret key:', error);
+        return false;
+      }
+    } else {
+      // Fallback: assume the secret is already the raw key (for backwards compatibility)
+      console.warn('[Resend Webhook] Secret does not start with whsec_ - using as raw UTF-8 key');
+      secretKey = Buffer.from(webhookSecret, 'utf8');
     }
 
-    const timestamp = timestampPart.split('=')[1];
-    const expectedSignature = signaturePart.split('=')[1];
+    // Step 2: Construct signed content: {svix-id}.{svix-timestamp}.{raw_body}
+    const signedContent = `${svixId}.${svixTimestamp}.${body}`;
 
-    // Construct signed payload: timestamp.body
-    const signedPayload = `${timestamp}.${body}`;
+    // Step 3: Compute HMAC-SHA256 and Base64 digest
+    const hmac = crypto.createHmac('sha256', secretKey);
+    hmac.update(signedContent, 'utf8');
+    const expectedSignature = hmac.digest('base64');
 
-    // Compute HMAC
-    const hmac = crypto.createHmac('sha256', webhookSecret);
-    hmac.update(signedPayload);
-    const computedSignature = hmac.digest('hex');
+    // Step 4: Compare with signatures in header (may contain multiple, space-separated)
+    const signatures = svixSignature.split(' ');
+    for (const sigWithVersion of signatures) {
+      // Format: "v1,<base64-signature>"
+      const parts = sigWithVersion.split(',');
+      if (parts.length !== 2 || parts[0] !== 'v1') {
+        continue;
+      }
 
-    // Compare signatures
-    const isValid = crypto.timingSafeEqual(
-      Buffer.from(expectedSignature),
-      Buffer.from(computedSignature)
-    );
+      const receivedSignature = parts[1];
 
-    if (!isValid) {
-      console.error('[Resend Webhook] Signature verification failed');
-      return false;
+      // Constant-time comparison to prevent timing attacks
+      if (
+        expectedSignature.length === receivedSignature.length &&
+        crypto.timingSafeEqual(
+          Buffer.from(expectedSignature),
+          Buffer.from(receivedSignature)
+        )
+      ) {
+        // Step 5: Validate timestamp freshness (prevent replay attacks)
+        const now = Math.floor(Date.now() / 1000);
+        const timestamp = parseInt(svixTimestamp, 10);
+        const age = Math.abs(now - timestamp);
+
+        if (age > 300) {
+          // More than 5 minutes old
+          console.error('[Resend Webhook] Signature too old:', {
+            age,
+            timestamp,
+            now,
+          });
+          return false;
+        }
+
+        return true;
+      }
     }
 
-    // Check timestamp to prevent replay attacks (allow 5 minutes)
-    const now = Math.floor(Date.now() / 1000);
-    const age = now - parseInt(timestamp);
-    if (age > 300) {
-      console.error('[Resend Webhook] Signature too old');
-      return false;
-    }
-
-    return true;
+    console.error('[Resend Webhook] Signature verification failed - no matching signature', {
+      expectedLength: expectedSignature.length,
+      receivedSignatures: signatures.length,
+      svixId: svixId.substring(0, 20) + '...',
+      timestamp: svixTimestamp,
+    });
+    return false;
   } catch (error) {
     console.error('[Resend Webhook] Signature verification error:', error);
     return false;
@@ -260,12 +303,10 @@ async function handleEmailOpened(data: {
 export async function POST(request: Request) {
   try {
     const headersList = await headers();
-    const signature =
-      headersList.get('svix-signature') || headersList.get('resend-signature');
     const body = await request.text();
 
-    // Verify webhook signature
-    const isValid = await verifyWebhookSignature(body, signature);
+    // Verify webhook signature (Svix format)
+    const isValid = await verifyWebhookSignature(body, headersList);
     if (!isValid) {
       console.error('[Resend Webhook] Invalid signature');
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
