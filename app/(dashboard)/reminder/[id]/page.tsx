@@ -74,6 +74,13 @@ export default function ReminderDetailPage() {
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
+  const [notes, setNotes] = useState<Array<{
+    id: string;
+    note_text: string;
+    created_at: string;
+    reminder_id?: string | null;
+  }>>([]);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [isCreatingFollowup, setIsCreatingFollowup] = useState(false);
   const [suppressionTransparency, setSuppressionTransparency] = useState<
     "proactive" | "on_open"
@@ -103,6 +110,22 @@ export default function ReminderDetailPage() {
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(date));
+
+  const fetchNotes = useCallback(async (contactIdToFetch: string) => {
+    if (!contactIdToFetch) return;
+    setIsLoadingNotes(true);
+    try {
+      const response = await fetch(`/api/contacts/${contactIdToFetch}/notes`);
+      if (response.ok) {
+        const data = await response.json();
+        setNotes(data.notes || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notes:", error);
+    } finally {
+      setIsLoadingNotes(false);
+    }
+  }, []);
 
   const loadReminder = useCallback(async () => {
     if (!reminderId) return;
@@ -159,10 +182,13 @@ export default function ReminderDetailPage() {
           .catch(() => {
             // Fail silently
           });
+        // Fetch notes for this contact
+        fetchNotes(reminder.contact_id);
       } else {
         setContactId(null);
         setContactName(null);
         setContactEmail(null);
+        setNotes([]);
       }
 
       // Fetch suppression details if status is suppressed
@@ -734,6 +760,52 @@ export default function ReminderDetailPage() {
             />
           )}
 
+          {/* Contact Notes */}
+          {contactId && (
+            <Card className="bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Contact Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingNotes ? (
+                  <div className="text-sm text-muted-foreground">
+                    Loading notes...
+                  </div>
+                ) : notes.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No notes yet. Add a note to get started.
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                    {notes.map((note) => (
+                      <div
+                        key={note.id}
+                        className="p-3 rounded-md bg-muted/50 border border-border/50"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-xs text-muted-foreground">
+                            {formatDisplayDate(new Date(note.created_at))}
+                          </p>
+                          {note.reminder_id === reminderId && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-primary/10 text-primary border-primary/20"
+                            >
+                              This reminder
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-foreground whitespace-pre-wrap">
+                          {note.note_text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Audit Timeline */}
           <AuditTimeline reminderId={reminderId} />
 
@@ -856,6 +928,10 @@ export default function ReminderDetailPage() {
                   toast.success("Note added successfully");
                   setAddNoteDialogOpen(false);
                   setNoteText("");
+                  // Refresh notes after adding
+                  if (contactId) {
+                    fetchNotes(contactId);
+                  }
                 } catch (error: any) {
                   console.error("Failed to add note:", error);
                   toast.error(error.message || "Failed to add note");
