@@ -44,8 +44,10 @@ export function PopupSystem() {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   // Track if we've already played sound for this popup to avoid duplicates
-  const [playedSoundForPopup, setPlayedSoundForPopup] = useState<string | null>(null);
-  
+  const [playedSoundForPopup, setPlayedSoundForPopup] = useState<string | null>(
+    null
+  );
+
   // Send email dialog state
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
   const [contactInfo, setContactInfo] = useState<{
@@ -66,7 +68,10 @@ export function PopupSystem() {
     // Resume on any user interaction to unlock audio (required by browsers)
     // Keep listeners active (not once) so audio can be resumed anytime
     const resumeAudio = async () => {
-      if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+      if (
+        audioContextRef.current &&
+        audioContextRef.current.state === "suspended"
+      ) {
         try {
           await audioContextRef.current.resume();
         } catch (error) {
@@ -77,7 +82,10 @@ export function PopupSystem() {
 
     const initAudioContext = async () => {
       try {
-        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const AudioContextClass =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
         if (!AudioContextClass) {
           return; // Audio not supported
         }
@@ -125,7 +133,11 @@ export function PopupSystem() {
 
   // Play ping sound when popup appears
   useEffect(() => {
-    if (currentPopup && uiState === "entering" && playedSoundForPopup !== currentPopup.id) {
+    if (
+      currentPopup &&
+      uiState === "entering" &&
+      playedSoundForPopup !== currentPopup.id
+    ) {
       playPingSound();
       setPlayedSoundForPopup(currentPopup.id);
     }
@@ -215,7 +227,9 @@ export function PopupSystem() {
               console.log("Realtime subscription active");
             } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
               setRealtimeConnected(false);
-              console.warn("Realtime subscription failed, falling back to polling");
+              console.warn(
+                "Realtime subscription failed, falling back to polling"
+              );
             }
           });
 
@@ -294,7 +308,10 @@ export function PopupSystem() {
 
       if (!audioContext) {
         // Fallback: create new context if persistent one doesn't exist
-        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const AudioContextClass =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
         if (!AudioContextClass) {
           return; // Audio not supported
         }
@@ -318,31 +335,40 @@ export function PopupSystem() {
       if (audioContext.state !== "running") {
         return; // Can't play sound if context isn't running
       }
-      
+
       // Create oscillator for the ping sound
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
-      
+
       // Connect nodes
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
-      
+
       // Configure ping sound: pleasant notification tone
       // Start at 800Hz, drop to 600Hz for a pleasant "ping" sound
       oscillator.type = "sine"; // Smooth sine wave
       oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.15);
-      
+      oscillator.frequency.exponentialRampToValueAtTime(
+        600,
+        audioContext.currentTime + 0.15
+      );
+
       // Volume envelope: quick attack, smooth decay
       // Slightly louder for background tabs (0.3 instead of 0.25)
       gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.02); // Quick attack
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2); // Smooth decay
-      
+      gainNode.gain.linearRampToValueAtTime(
+        0.3,
+        audioContext.currentTime + 0.02
+      ); // Quick attack
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioContext.currentTime + 0.2
+      ); // Smooth decay
+
       // Play the sound
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.25); // Stop after 250ms
-      
+
       // Clean up oscillator (but keep audio context alive)
       oscillator.onended = () => {
         // Don't close the audio context - keep it alive for future sounds
@@ -558,28 +584,37 @@ export function PopupSystem() {
       return;
     }
 
-    // Check if this is a reminder_due popup with contact_id
+    // Check if this is a reminder_due popup with contact_id (not reminder_created)
     const sourceEventType = (currentPopup.payload as Record<string, unknown>)
       ?.source_event_type as string | undefined;
+    const templateKey = (currentPopup.payload as Record<string, unknown>)
+      ?.template_key as string | undefined;
     const isReminderDue = sourceEventType === "reminder_due";
-    const canSendEmail = isReminderDue && currentPopup.contact_id;
+    const isReminderCreated =
+      sourceEventType === "reminder_created" ||
+      templateKey === "reminder_created";
+    const canSendEmail =
+      isReminderDue && !isReminderCreated && currentPopup.contact_id;
 
     // Fetch contact info if needed (only if we haven't fetched for this contact_id yet)
-    if (canSendEmail && fetchedContactIdRef.current !== currentPopup.contact_id) {
+    if (
+      canSendEmail &&
+      fetchedContactIdRef.current !== currentPopup.contact_id
+    ) {
       fetchedContactIdRef.current = currentPopup.contact_id;
       const supabase = createClient();
       void (async () => {
         try {
           const { data, error } = await supabase
-            .from('contacts')
-            .select('id, name, first_name, last_name, email')
-            .eq('id', currentPopup.contact_id)
+            .from("contacts")
+            .select("id, name, first_name, last_name, email")
+            .eq("id", currentPopup.contact_id)
             .single();
-          
+
           if (!error && data) {
             const name =
               data.name ||
-              `${data.first_name || ''} ${data.last_name || ''}`.trim() ||
+              `${data.first_name || ""} ${data.last_name || ""}`.trim() ||
               undefined;
             setContactInfo({
               id: data.id,
@@ -609,12 +644,18 @@ export function PopupSystem() {
   // Don't show snooze for reminder_completed popups (reminder already sent)
   const sourceEventType = (currentPopup.payload as Record<string, unknown>)
     ?.source_event_type as string | undefined;
+  const templateKey = (currentPopup.payload as Record<string, unknown>)
+    ?.template_key as string | undefined;
   const isReminderCompleted = sourceEventType === "reminder_completed";
   const isReminderDue = sourceEventType === "reminder_due";
+  const isReminderCreated =
+    sourceEventType === "reminder_created" ||
+    templateKey === "reminder_created";
   const canSnooze = currentPopup.reminder_id && !isReminderCompleted;
-  
-  // Show send email button for reminder_due popups with contact_id
-  const canSendEmail = isReminderDue && currentPopup.contact_id;
+
+  // Show send email button only for reminder_due popups with contact_id (not for reminder_created)
+  const canSendEmail =
+    isReminderDue && !isReminderCreated && currentPopup.contact_id;
 
   return (
     <div
