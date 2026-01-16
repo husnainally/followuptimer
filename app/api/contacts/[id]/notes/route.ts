@@ -6,7 +6,6 @@ import { logEvent } from "@/lib/events";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-
 // POST /api/contacts/[id]/notes - Add a timestamped note to a contact
 export async function POST(
   request: Request,
@@ -45,8 +44,9 @@ export async function POST(
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
 
-    // Add note to history
-    const { data: noteHistory, error: historyError } = await supabase
+    // Add note to history (if table exists)
+    let noteHistory = null;
+    const { data: historyData, error: historyError } = await supabase
       .from("contact_notes_history")
       .insert({
         contact_id: id,
@@ -58,13 +58,28 @@ export async function POST(
       .single();
 
     if (historyError) {
-      console.error("Failed to insert note to history:", {
-        error: historyError,
-        contact_id: id,
-        user_id: user.id,
-        reminder_id: reminder_id || null,
-      });
-      throw new Error(`Failed to save note: ${historyError.message}`);
+      // If table doesn't exist, log warning but continue (migration not applied)
+      if (
+        historyError.message?.includes("could not find the table") ||
+        historyError.message?.includes("does not exist")
+      ) {
+        console.warn(
+          "contact_notes_history table not found - migration may not be applied:",
+          historyError.message
+        );
+        // Continue without history tracking - still update contact notes
+      } else {
+        // Other errors are more serious
+        console.error("Failed to insert note to history:", {
+          error: historyError,
+          contact_id: id,
+          user_id: user.id,
+          reminder_id: reminder_id || null,
+        });
+        throw new Error(`Failed to save note: ${historyError.message}`);
+      }
+    } else {
+      noteHistory = historyData;
     }
 
     // Update contact notes field (append with timestamp)
@@ -110,19 +125,24 @@ export async function POST(
     return NextResponse.json({
       success: true,
       note: noteHistory,
+      warning: noteHistory
+        ? undefined
+        : "Note history table not available - migration may need to be applied",
     });
   } catch (error: unknown) {
     console.error("Failed to add note:", error);
     const message =
       error instanceof Error ? error.message : "Failed to add note";
-    
+
     // Return more specific error information
-    const statusCode = 
-      message.includes("not found") ? 404 :
-      message.includes("Unauthorized") ? 401 :
-      message.includes("required") ? 400 :
-      500;
-    
+    const statusCode = message.includes("not found")
+      ? 404
+      : message.includes("Unauthorized")
+      ? 401
+      : message.includes("required")
+      ? 400
+      : 500;
+
     return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
@@ -174,4 +194,3 @@ export async function GET(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-
