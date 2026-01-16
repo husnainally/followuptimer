@@ -176,7 +176,7 @@ export async function GET(
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
 
-    // Get note history
+    // Get note history (if table exists)
     const { data: notes, error } = await supabase
       .from("contact_notes_history")
       .select("id, note_text, created_at, reminder_id")
@@ -184,7 +184,19 @@ export async function GET(
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (error) throw error;
+    // If table doesn't exist, return empty array (migration not applied yet)
+    if (error) {
+      if (
+        error.message?.includes("could not find the table") ||
+        error.message?.includes("does not exist")
+      ) {
+        console.warn(
+          "contact_notes_history table not found - returning empty array"
+        );
+        return NextResponse.json({ notes: [] });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ notes: notes || [] });
   } catch (error: unknown) {
