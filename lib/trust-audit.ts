@@ -116,54 +116,59 @@ export async function getReminderAuditTimeline(
   try {
     const supabase = createServiceClient();
     
-    // Get total count
-    const { count, error: countError } = await supabase
+    // Event types to include in audit timeline
+    const eventTypes = [
+      "reminder_created",
+      "reminder_triggered",
+      "reminder_snoozed",
+      "reminder_suppressed",
+      "reminder_completed",
+      "reminder_dismissed",
+      "reminder_overdue",
+      "reminder_due", // Also include reminder_due events
+    ];
+
+    // Build base query
+    let query = supabase
       .from("events")
-      .select("*", { count: "exact", head: true })
+      .select("*", { count: "exact" })
       .eq("user_id", userId)
       .eq("reminder_id", reminderId)
-      .in("event_type", [
-        "reminder_created",
-        "reminder_triggered",
-        "reminder_snoozed",
-        "reminder_suppressed",
-        "reminder_completed",
-        "reminder_dismissed",
-        "reminder_overdue",
-      ]);
+      .in("event_type", eventTypes);
 
-    if (countError) throw countError;
-
-    // Get paginated events
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("reminder_id", reminderId)
-      .in("event_type", [
-        "reminder_created",
-        "reminder_triggered",
-        "reminder_snoozed",
-        "reminder_suppressed",
-        "reminder_completed",
-        "reminder_dismissed",
-        "reminder_overdue",
-      ])
+    // Get total count and data in one query (more efficient)
+    const { data, error, count } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error fetching audit timeline:", {
+        error,
+        userId,
+        reminderId,
+        limit,
+        offset,
+      });
+      throw new Error(`Database error: ${error.message || "Unknown error"}`);
+    }
     
     const total = count || 0;
     const hasMore = offset + (data?.length || 0) < total;
 
     return {
-      events: data || [],
+      events: (data || []) as ReminderAuditEvent[],
       hasMore,
       total,
     };
   } catch (error) {
-    console.error("Failed to fetch reminder audit timeline:", error);
+    console.error("Failed to fetch reminder audit timeline:", {
+      error,
+      userId,
+      reminderId,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
+    // Return empty result instead of throwing - allows UI to handle gracefully
     return { events: [], hasMore: false, total: 0 };
   }
 }
@@ -185,9 +190,18 @@ export async function getReminderSuppressionDetails(
       .eq("event_type", "reminder_suppressed")
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors when no record exists
 
-    if (error || !data) return null;
+    if (error) {
+      // If error is "no rows returned", that's fine - just return null
+      if (error.code === "PGRST116") {
+        return null;
+      }
+      console.error("Error fetching suppression details:", error);
+      return null;
+    }
+
+    if (!data) return null;
 
     const eventData = (data.event_data || {}) as Record<string, unknown>;
     const reasonCode = (eventData.reason_code as string) || "other";
@@ -207,7 +221,12 @@ export async function getReminderSuppressionDetails(
       evaluated_at: evaluatedAt || data.created_at,
     };
   } catch (error) {
-    console.error("Failed to fetch suppression details:", error);
+    console.error("Failed to fetch suppression details:", {
+      error,
+      userId,
+      reminderId,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    });
     return null;
   }
 }

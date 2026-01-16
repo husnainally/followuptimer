@@ -16,7 +16,6 @@ interface AuditTimelineProps {
 }
 
 const INITIAL_LIMIT = 20;
-const LOAD_MORE_LIMIT = 20;
 
 export function AuditTimeline({ reminderId }: AuditTimelineProps) {
   const [events, setEvents] = useState<ReminderAuditEvent[]>([]);
@@ -27,42 +26,56 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
   const [offset, setOffset] = useState(0);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  const fetchTimeline = useCallback(async (currentOffset: number = 0, isInitial: boolean = false) => {
-    try {
-      if (isInitial) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-      setError(null);
-      
-      const response = await fetch(
-        `/api/reminders/${reminderId}/audit?limit=${INITIAL_LIMIT}&offset=${currentOffset}`
-      );
-      if (!response.ok) throw new Error("Failed to fetch audit timeline");
+  const fetchTimeline = useCallback(
+    async (currentOffset: number = 0, isInitial: boolean = false) => {
+      try {
+        if (isInitial) {
+          setLoading(true);
+        } else {
+          setLoadingMore(true);
+        }
+        setError(null);
 
-      const data = await response.json();
-      const newEvents = data.timeline || [];
-      
-      if (isInitial) {
-        // Reverse to show chronological order (oldest first)
-        setEvents(newEvents.reverse());
-        setOffset(newEvents.length);
-      } else {
-        // Append new events (already in reverse chronological order from API)
-        setEvents((prev) => [...prev, ...newEvents.reverse()]);
-        setOffset((prev) => prev + newEvents.length);
+        const response = await fetch(
+          `/api/reminders/${reminderId}/audit?limit=${INITIAL_LIMIT}&offset=${currentOffset}`
+        );
+
+        if (!response.ok) {
+          let errorMessage = "Failed to fetch audit timeline";
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            // If JSON parsing fails, use status text
+            errorMessage = response.statusText || errorMessage;
+          }
+          throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        const newEvents = data.timeline || [];
+
+        if (isInitial) {
+          // Reverse to show chronological order (oldest first)
+          setEvents(newEvents.reverse());
+          setOffset(newEvents.length);
+        } else {
+          // Append new events (already in reverse chronological order from API)
+          setEvents((prev) => [...prev, ...newEvents.reverse()]);
+          setOffset((prev) => prev + newEvents.length);
+        }
+
+        setHasMore(data.pagination?.hasMore || false);
+      } catch (err) {
+        console.error("Failed to fetch audit timeline:", err);
+        setError("Failed to load history");
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
-      
-      setHasMore(data.pagination?.hasMore || false);
-    } catch (err) {
-      console.error("Failed to fetch audit timeline:", err);
-      setError("Failed to load history");
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, [reminderId]);
+    },
+    [reminderId]
+  );
 
   useEffect(() => {
     fetchTimeline(0, true);
@@ -75,9 +88,10 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
         fetchTimeline(0, true);
       }
     };
-    
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [fetchTimeline]);
 
   // Add periodic refresh (every 15 seconds when visible)
@@ -87,7 +101,7 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
         fetchTimeline(0, true);
       }
     }, 15000); // Every 15 seconds
-    
+
     return () => clearInterval(interval);
   }, [fetchTimeline]);
 
@@ -99,9 +113,10 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
         fetchTimeline(0, true);
       }
     };
-    
-    window.addEventListener('reminder-updated', handleReminderUpdate);
-    return () => window.removeEventListener('reminder-updated', handleReminderUpdate);
+
+    window.addEventListener("reminder-updated", handleReminderUpdate);
+    return () =>
+      window.removeEventListener("reminder-updated", handleReminderUpdate);
   }, [reminderId, fetchTimeline]);
 
   const handleLoadMore = useCallback(() => {
@@ -110,15 +125,19 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
     }
   }, [loadingMore, hasMore, offset, fetchTimeline]);
 
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-    
-    // Load more when within 100px of bottom
-    if (scrollBottom < 100 && hasMore && !loadingMore) {
-      handleLoadMore();
-    }
-  }, [hasMore, loadingMore, handleLoadMore]);
+  const handleScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const target = e.currentTarget;
+      const scrollBottom =
+        target.scrollHeight - target.scrollTop - target.clientHeight;
+
+      // Load more when within 100px of bottom
+      if (scrollBottom < 100 && hasMore && !loadingMore) {
+        handleLoadMore();
+      }
+    },
+    [hasMore, loadingMore, handleLoadMore]
+  );
 
   if (loading) {
     return (
@@ -192,18 +211,23 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
             {events.map((event, index) => {
               const displayInfo = getEventDisplayInfo(event.event_type);
               // Override label for snoozed events that have a new_remind_at (rescheduled)
-              const eventData = event.event_data as Record<string, unknown> | null;
+              const eventData = event.event_data as Record<
+                string,
+                unknown
+              > | null;
               const newRemindAt = eventData?.new_remind_at;
               const durationMinutes = eventData?.duration_minutes;
               const isRescheduled =
                 event.event_type === "reminder_snoozed" &&
                 eventData &&
                 newRemindAt != null;
-              const finalLabel = isRescheduled ? "Rescheduled" : displayInfo.label;
+              const finalLabel = isRescheduled
+                ? "Rescheduled"
+                : displayInfo.label;
               const finalDescription = isRescheduled
                 ? "Reminder was rescheduled to a new time"
                 : displayInfo.description;
-              
+
               const isLast = index === events.length - 1;
               const eventId = `audit-event-${event.id}`;
               const iconId = `audit-icon-${event.id}`;
@@ -277,39 +301,38 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
                       )}
 
                     {/* Snooze/Reschedule details */}
-                    {event.event_type === "reminder_snoozed" &&
-                      eventData && (
-                        <div
-                          className="mt-2 p-2 rounded-md bg-muted/50 text-xs"
-                          role="region"
-                          aria-label="Reschedule details"
-                        >
-                          {typeof newRemindAt === "string" && (
-                            <p className="text-muted-foreground">
-                              Rescheduled to:{" "}
-                              {new Date(newRemindAt).toLocaleString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          )}
-                          {durationMinutes != null && (
-                            <p className="text-muted-foreground mt-1">
-                              Duration:{" "}
-                              {Math.round(Number(durationMinutes))} minutes
-                            </p>
-                          )}
-                        </div>
-                      )}
+                    {event.event_type === "reminder_snoozed" && eventData && (
+                      <div
+                        className="mt-2 p-2 rounded-md bg-muted/50 text-xs"
+                        role="region"
+                        aria-label="Reschedule details"
+                      >
+                        {typeof newRemindAt === "string" && (
+                          <p className="text-muted-foreground">
+                            Rescheduled to:{" "}
+                            {new Date(newRemindAt).toLocaleString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        )}
+                        {durationMinutes != null && (
+                          <p className="text-muted-foreground mt-1">
+                            Duration: {Math.round(Number(durationMinutes))}{" "}
+                            minutes
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
-          
+
           {/* Load More Button */}
           {hasMore && (
             <div className="flex justify-center pt-4 pb-2">
@@ -324,9 +347,13 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
               </Button>
             </div>
           )}
-          
+
           {loadingMore && (
-            <div className="flex justify-center pt-2 pb-4" role="status" aria-live="polite">
+            <div
+              className="flex justify-center pt-2 pb-4"
+              role="status"
+              aria-live="polite"
+            >
               <div className="space-y-2">
                 <Skeleton className="h-4 w-32" />
               </div>
@@ -337,4 +364,3 @@ export function AuditTimeline({ reminderId }: AuditTimelineProps) {
     </Card>
   );
 }
-

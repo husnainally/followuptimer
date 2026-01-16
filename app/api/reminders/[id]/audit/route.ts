@@ -23,6 +23,13 @@ export async function GET(
 
     const { id } = await params;
 
+    if (!id) {
+      return NextResponse.json(
+        { error: "Reminder ID is required" },
+        { status: 400 }
+      );
+    }
+
     // Get pagination parameters from query string
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
@@ -40,20 +47,28 @@ export async function GET(
     const suppressionDetails = await getReminderSuppressionDetails(user.id, id);
 
     return NextResponse.json({
-      timeline: timelineResult.events,
+      timeline: timelineResult.events || [],
       pagination: {
-        hasMore: timelineResult.hasMore,
-        total: timelineResult.total,
+        hasMore: timelineResult.hasMore || false,
+        total: timelineResult.total || 0,
         limit,
         offset,
       },
-      suppressionDetails,
+      suppressionDetails: suppressionDetails || null,
     });
   } catch (error: unknown) {
     console.error("Failed to fetch reminder audit:", error);
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch audit data";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const errorMessage =
+      error instanceof Error
+        ? error.message || "Unknown error occurred"
+        : error && typeof error === "object" && "message" in error
+        ? String(error.message) || "Unknown error occurred"
+        : "Failed to fetch audit data";
+    
+    return NextResponse.json(
+      { error: errorMessage, details: error instanceof Error ? error.stack : undefined },
+      { status: 500 }
+    );
   }
 }
 
