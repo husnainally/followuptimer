@@ -57,7 +57,15 @@ export async function POST(
       .select()
       .single();
 
-    if (historyError) throw historyError;
+    if (historyError) {
+      console.error("Failed to insert note to history:", {
+        error: historyError,
+        contact_id: id,
+        user_id: user.id,
+        reminder_id: reminder_id || null,
+      });
+      throw new Error(`Failed to save note: ${historyError.message}`);
+    }
 
     // Update contact notes field (append with timestamp)
     const timestamp = new Date().toLocaleString();
@@ -72,10 +80,17 @@ export async function POST(
       .eq("id", id)
       .eq("user_id", user.id);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error("Failed to update contact notes:", {
+        error: updateError,
+        contact_id: id,
+        user_id: user.id,
+      });
+      throw new Error(`Failed to update contact notes: ${updateError.message}`);
+    }
 
-    // Log event
-    await logEvent({
+    // Log event (non-blocking - don't fail note creation if event logging fails)
+    logEvent({
       userId: user.id,
       eventType: "preference_changed", // Using existing event type
       eventData: {
@@ -87,6 +102,9 @@ export async function POST(
       source: "app",
       contactId: id,
       reminderId: reminder_id || undefined,
+    }).catch((error) => {
+      // Log error but don't throw - event logging is non-critical
+      console.error("Failed to log note_added event:", error);
     });
 
     return NextResponse.json({
@@ -97,7 +115,15 @@ export async function POST(
     console.error("Failed to add note:", error);
     const message =
       error instanceof Error ? error.message : "Failed to add note";
-    return NextResponse.json({ error: message }, { status: 500 });
+    
+    // Return more specific error information
+    const statusCode = 
+      message.includes("not found") ? 404 :
+      message.includes("Unauthorized") ? 401 :
+      message.includes("required") ? 400 :
+      500;
+    
+    return NextResponse.json({ error: message }, { status: statusCode });
   }
 }
 
