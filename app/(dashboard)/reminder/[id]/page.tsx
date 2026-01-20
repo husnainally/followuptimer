@@ -127,8 +127,89 @@ export default function ReminderDetailPage() {
     }
   }, []);
 
-  const loadReminder = useCallback(async () => {
+  // Refresh only metadata without resetting form (used when form has unsaved changes)
+  const refreshMetadata = useCallback(async () => {
     if (!reminderId) return;
+    try {
+      const response = await fetch(`/api/reminders/${reminderId}`);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        return; // Fail silently for metadata-only refresh
+      }
+
+      const reminder = payload?.reminder;
+
+      // Update only metadata, not form fields
+      setMeta((prevMeta) => ({
+        created_at: reminder?.created_at
+          ? new Date(reminder.created_at)
+          : prevMeta?.created_at,
+        updated_at: reminder?.updated_at
+          ? new Date(reminder.updated_at)
+          : prevMeta?.updated_at,
+        status: reminder?.status ?? prevMeta?.status,
+        snoozed_until: reminder?.snoozed_until
+          ? new Date(reminder.snoozed_until)
+          : prevMeta?.snoozed_until ?? null,
+      }));
+
+      // Update contact info if changed
+      if (reminder?.contact_id !== contactId) {
+        if (reminder?.contact_id) {
+          setContactId(reminder.contact_id);
+          // Fetch contact details including email
+          fetch(`/api/contacts/${reminder.contact_id}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.contact) {
+                setContactName(data.contact.name);
+                setContactEmail(data.contact.email || null);
+              }
+            })
+            .catch(() => {
+              // Fail silently
+            });
+          // Fetch notes for this contact
+          fetchNotes(reminder.contact_id);
+        } else {
+          setContactId(null);
+          setContactName(null);
+          setContactEmail(null);
+          setNotes([]);
+        }
+      }
+
+      // Fetch suppression details if status is suppressed
+      if (reminder?.status === "suppressed" || reminder?.status === "pending") {
+        try {
+          const auditResponse = await fetch(
+            `/api/reminders/${reminderId}/audit`
+          );
+          if (auditResponse.ok) {
+            const auditData = await auditResponse.json();
+            setSuppressionDetails(auditData.suppressionDetails);
+          }
+        } catch (err) {
+          // Fail silently - suppression details are optional
+          console.error("Failed to fetch suppression details:", err);
+        }
+      }
+    } catch (error) {
+      // Fail silently for metadata-only refresh
+      console.error("Failed to refresh metadata:", error);
+    }
+  }, [reminderId, contactId, fetchNotes]);
+
+  const loadReminder = useCallback(async (skipIfDirty = false) => {
+    if (!reminderId) return;
+    
+    // If form is dirty and we should skip, use metadata-only refresh
+    if (skipIfDirty && form.formState.isDirty) {
+      refreshMetadata();
+      return;
+    }
+
     setInitialLoading(true);
     setLoadError(null);
     try {
@@ -144,15 +225,18 @@ export default function ReminderDetailPage() {
         ? new Date(reminder.remind_at)
         : new Date();
 
-      form.reset({
-        message: reminder?.message ?? "",
-        remind_at: remindAtDate,
-        tone: reminder?.tone ?? "motivational",
-        notification_method: reminder?.notification_method ?? "email",
-        affirmation_enabled: reminder?.affirmation_enabled ?? false,
-      });
-      setDateValue(remindAtDate);
-      setTimeValue(format(remindAtDate, "HH:mm"));
+      // Only reset form if it's not dirty
+      if (!form.formState.isDirty) {
+        form.reset({
+          message: reminder?.message ?? "",
+          remind_at: remindAtDate,
+          tone: reminder?.tone ?? "motivational",
+          notification_method: reminder?.notification_method ?? "email",
+          affirmation_enabled: reminder?.affirmation_enabled ?? false,
+        });
+        setDateValue(remindAtDate);
+        setTimeValue(format(remindAtDate, "HH:mm"));
+      }
 
       setMeta({
         created_at: reminder?.created_at
@@ -232,7 +316,7 @@ export default function ReminderDetailPage() {
     } finally {
       setInitialLoading(false);
     }
-  }, [reminderId, form]);
+  }, [reminderId, form, refreshMetadata, fetchNotes]);
 
   useEffect(() => {
     loadReminder();
@@ -242,37 +326,49 @@ export default function ReminderDetailPage() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        loadReminder();
+        // Skip refresh if form is dirty or dialogs are open
+        if (form.formState.isDirty || addNoteDialogOpen || sendEmailDialogOpen) {
+          return;
+        }
+        loadReminder(true);
       }
     };
     
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [loadReminder]);
+  }, [loadReminder, form.formState.isDirty, addNoteDialogOpen, sendEmailDialogOpen]);
 
   // Add periodic refresh (every 30 seconds when visible)
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        loadReminder();
+        // Skip refresh if form is dirty or dialogs are open
+        if (form.formState.isDirty || addNoteDialogOpen || sendEmailDialogOpen) {
+          return;
+        }
+        loadReminder(true);
       }
     }, 30000); // Every 30 seconds
     
     return () => clearInterval(interval);
-  }, [loadReminder]);
+  }, [loadReminder, form.formState.isDirty, addNoteDialogOpen, sendEmailDialogOpen]);
 
   // Listen for custom reminder-updated events
   useEffect(() => {
     const handleReminderUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail?.reminderId === reminderId) {
-        loadReminder();
+        // Skip refresh if form is dirty or dialogs are open
+        if (form.formState.isDirty || addNoteDialogOpen || sendEmailDialogOpen) {
+          return;
+        }
+        loadReminder(true);
       }
     };
     
     window.addEventListener('reminder-updated', handleReminderUpdate);
     return () => window.removeEventListener('reminder-updated', handleReminderUpdate);
-  }, [reminderId, loadReminder]);
+  }, [reminderId, loadReminder, form.formState.isDirty, addNoteDialogOpen, sendEmailDialogOpen]);
 
   useEffect(() => {
     if (!dateValue || !timeValue) return;
@@ -365,7 +461,7 @@ export default function ReminderDetailPage() {
           <Button variant="outline" onClick={() => router.push("/reminder")}>
             Go back
           </Button>
-          <Button onClick={loadReminder}>Retry</Button>
+          <Button onClick={() => loadReminder()}>Retry</Button>
         </div>
       </div>
     );
