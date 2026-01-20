@@ -41,6 +41,24 @@ async function processReminder(reminderId: string) {
     };
   }
 
+  // CRITICAL: Check reminder status to prevent duplicate processing
+  // If reminder is no longer pending (already sent/processed), skip it
+  if (reminder.status !== 'pending') {
+    if (!isProduction) {
+      console.log('[Process-Overdue] Reminder already processed, skipping:', {
+        reminderId,
+        status: reminder.status,
+      });
+    }
+    return {
+      success: false,
+      skipped: true,
+      reason: 'Already processed',
+      currentStatus: reminder.status,
+      reminderId,
+    };
+  }
+
   // Check if reminder should be suppressed
   const profile = reminder.profiles;
   const timezone = profile?.timezone || 'UTC';
@@ -448,11 +466,27 @@ async function processReminder(reminderId: string) {
     }
   }
 
-  // Update reminder status (success if at least one notification succeeded)
-  await supabase
+  // Update reminder status atomically (only if still pending to prevent race conditions)
+  // This ensures only one process can mark the reminder as sent
+  const { data: updateResult, error: updateError } = await supabase
     .from('reminders')
     .update({ status: overallSuccess ? 'sent' : 'failed' })
-    .eq('id', reminderId);
+    .eq('id', reminderId)
+    .eq('status', 'pending') // Atomic check: only update if still pending
+    .select('id')
+    .single();
+
+  // If update failed because status changed (race condition), log it but don't fail
+  if (updateError && updateResult === null) {
+    if (!isProduction) {
+      console.log('[Process-Overdue] Reminder status changed during processing (race condition):', {
+        reminderId,
+        error: updateError.message,
+      });
+    }
+    // Status was already updated by another process (likely QStash webhook)
+    // This is expected behavior to prevent duplicates
+  }
 
   // Log reminder_triggered event when reminder actually fires
   await logEvent({

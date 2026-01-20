@@ -59,6 +59,24 @@ async function handler(request: Request) {
       );
     }
 
+    // CRITICAL: Check reminder status to prevent duplicate processing
+    // If reminder is no longer pending (already sent/processed), skip it
+    if (reminder.status !== "pending") {
+      if (!isProduction) {
+        console.log("[Webhook] Reminder already processed, skipping:", {
+          reminderId,
+          status: reminder.status,
+        });
+      }
+      return NextResponse.json({
+        success: false,
+        skipped: true,
+        reason: "Already processed",
+        currentStatus: reminder.status,
+        message: "Reminder was already processed by another handler",
+      });
+    }
+
     // Check if reminder should be suppressed
     const profile = reminder.profiles;
     const timezone = profile?.timezone || "UTC";
@@ -515,7 +533,8 @@ async function handler(request: Request) {
       }
     }
 
-    // Update reminder status (success if at least one notification succeeded)
+    // Update reminder status atomically (only if still pending to prevent race conditions)
+    // This ensures only one process can mark the reminder as sent
     const now = new Date();
     const updateData: any = { status: overallSuccess ? "sent" : "failed" };
 
@@ -530,7 +549,26 @@ async function handler(request: Request) {
         .eq("id", reminder.contact_id);
     }
 
-    // Reminder status update removed - completion only happens when user clicks "Mark Done" in popup
+    // Atomically update reminder status (only if still pending to prevent duplicate processing)
+    const { data: updateResult, error: updateError } = await supabase
+      .from("reminders")
+      .update(updateData)
+      .eq("id", reminderId)
+      .eq("status", "pending") // Atomic check: only update if still pending
+      .select("id")
+      .single();
+
+    // If update failed because status changed (race condition), log it but don't fail
+    if (updateError && updateResult === null) {
+      if (!isProduction) {
+        console.log("[Webhook] Reminder status changed during processing (race condition):", {
+          reminderId,
+          error: updateError.message,
+        });
+      }
+      // Status was already updated by another process (likely process-overdue route)
+      // This is expected behavior to prevent duplicates
+    }
 
     // Log reminder_triggered event when reminder actually fires
     // Note: reminder_completed event is only logged when user clicks "Mark Done" in popup

@@ -149,10 +149,58 @@ export default function RemindersPage() {
     }
   }, [reminders, hasLoaded])
 
+  // Reusable function to fetch reminders
+  const fetchReminders = async () => {
+    setLoading(true)
+    setErrorMessage(null)
+    try {
+      const response = await fetch("/api/reminders")
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to load reminders")
+      }
+
+      const normalized: Reminder[] = (payload?.reminders ?? []).map((reminder: any) => ({
+        ...reminder,
+        remind_at: new Date(reminder.remind_at),
+        created_at: reminder.created_at ? new Date(reminder.created_at) : new Date(reminder.remind_at),
+      }))
+
+      setReminders(normalized)
+      setHasLoaded(true)
+
+      // Fetch overdue handling preference
+      try {
+        const prefsResponse = await fetch("/api/preferences")
+        if (prefsResponse.ok) {
+          const prefsData = await prefsResponse.json()
+          if (prefsData.preferences?.overdue_handling) {
+            setOverdueHandling(prefsData.preferences.overdue_handling)
+          }
+        }
+      } catch (err) {
+        // Fail silently - use default
+        console.error("Failed to fetch overdue handling preference:", err)
+      }
+
+      // Check for overdue reminders after loading
+      await processOverdueReminders(normalized)
+
+    } catch (error: any) {
+      const message = error?.message || "Failed to load reminders"
+      setErrorMessage(message)
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController()
 
-    async function fetchReminders() {
+    // Create a version that respects abort signal for initial load
+    async function fetchRemindersWithAbort() {
       setLoading(true)
       setErrorMessage(null)
       try {
@@ -200,7 +248,7 @@ export default function RemindersPage() {
     }
 
     setTimeout(() => {
-      fetchReminders()
+      fetchRemindersWithAbort()
     }, 200)
     return () => controller.abort()
   }, [])
@@ -471,6 +519,7 @@ export default function RemindersPage() {
               setSelectedReminder(reminder)
               setIsDialogOpen(true)
             }}
+            onReminderDeleted={fetchReminders}
             overdueHandling={overdueHandling}
           />
 
