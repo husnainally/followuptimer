@@ -153,7 +153,9 @@ function generateReminderEmailHTML(
             margin-bottom: 12px !important;
           }
           .affirmation-text {
-            font-size: 16px !important;
+            font-size: 18px !important;
+            font-weight: 600 !important;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
           }
           .reminder-card {
             padding: 24px 20px !important;
@@ -232,7 +234,7 @@ function generateReminderEmailHTML(
         <!-- Affirmation Card -->
         <div class="affirmation-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
           <div class="affirmation-emoji" style="font-size: 40px; margin-bottom: 16px;">✨</div>
-          <p class="affirmation-text" style="color: white; font-size: 18px; line-height: 1.6; margin: 0; font-weight: 500;">${escapeHtml(
+          <p class="affirmation-text" style="color: white; font-size: 18px; line-height: 1.6; margin: 0; font-weight: 600; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);">${escapeHtml(
             affirmation
           )}</p>
         </div>
