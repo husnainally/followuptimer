@@ -137,7 +137,7 @@ export default function DashboardPage() {
       // Fetch reminders - CRITICAL: Filter by user_id to prevent data leakage
       const { data: remindersData, error: remindersError } = await supabase
         .from("reminders")
-        .select("*")
+        .select("*, contacts:contact_id(id, name)")
         .eq("user_id", user.id)
         .order("remind_at", { ascending: true });
 
