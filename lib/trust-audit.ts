@@ -117,6 +117,7 @@ export async function getReminderAuditTimeline(
     const supabase = createServiceClient();
     
     // Event types to include in audit timeline
+    // Note: reminder_due is excluded - it's internal-only for popup triggers, not shown to users
     const eventTypes = [
       "reminder_created",
       "reminder_triggered",
@@ -125,7 +126,6 @@ export async function getReminderAuditTimeline(
       "reminder_completed",
       "reminder_dismissed",
       "reminder_overdue",
-      "reminder_due", // Also include reminder_due events
     ];
 
     // Build base query
@@ -277,6 +277,11 @@ export function getEventDisplayInfo(eventType: string): {
       icon: "⚠️",
       label: "Overdue",
       description: "Reminder became overdue",
+    },
+    reminder_due: {
+      icon: "⏰",
+      label: "Due",
+      description: "Reminder is due",
     },
   };
 
