@@ -157,12 +157,17 @@ function buildTemplatePayload(args: {
         payload: basePayload,
       };
     }
-    case "reminder_due":
+    case "reminder_due": {
+      // Use reminder message if available, otherwise use contact name
+      const reminderMessage = safeString(args.eventData.message, "");
+      const messageText = reminderMessage || (contactName !== "this contact" ? contactName : "Your reminder");
+      
       return {
-        title: "Follow-up due",
-        message: `Follow-up due: ${contactName}.`,
+        title: "Reminder",
+        message: messageText,
         payload: basePayload,
       };
+    }
     case "reminder_completed": {
       const reminderMessage = safeString(args.eventData.message, "");
       const messagePreview =

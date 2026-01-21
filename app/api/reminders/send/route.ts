@@ -600,6 +600,7 @@ async function handler(request: Request) {
             reminder_id: reminderId,
             remind_at: scheduledTime.toISOString(),
             notification_method: reminder.notification_method,
+            message: reminder.message,
           },
           contactId: reminder.contact_id || undefined,
           reminderId: reminderId,
