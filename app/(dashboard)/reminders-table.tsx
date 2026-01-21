@@ -43,6 +43,11 @@ export interface Reminder {
   status: string;
   notification_method?: string;
   created_at: Date;
+  contact_id?: string | null;
+  contacts?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 type RemindersTableProps = {
@@ -229,6 +234,7 @@ export function RemindersTable({
         <TableHeader className='bg-gray-200 hover:bg-gray-200 '>
           <TableRow className='bg-gray-200 hover:bg-gray-200'>
             <TableHead>Message</TableHead>
+            <TableHead>Contact</TableHead>
             <TableHead>Scheduled</TableHead>
             <TableHead>Tone</TableHead>
             <TableHead>Status</TableHead>
@@ -239,7 +245,7 @@ export function RemindersTable({
           {isLoading ? (
             Array.from({ length: 3 }).map((_, idx) => (
               <TableRow key={`skeleton-${idx}`}>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <div className='flex items-center gap-4 py-4'>
                     <Skeleton className='h-4 w-1/3' />
                     <Skeleton className='h-4 w-1/4' />
@@ -252,7 +258,7 @@ export function RemindersTable({
             ))
           ) : reminders.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className='p-0 bg-white hover:bg-white'>
+              <TableCell colSpan={6} className='p-0 bg-white hover:bg-white'>
                 <div className='flex flex-col items-center justify-center gap-3 text-center py-12 hover:bg-white'>
                   <div className='inline-flex size-16 items-center justify-center rounded-full text-primary'>
                     <BellRing className='h-15 w-16' />
@@ -288,17 +294,20 @@ export function RemindersTable({
               };
 
               return (
-                <TableRow
-                  key={reminder.id}
-                  className={cn(
-                    'hover:bg-muted/50',
-                    onReminderClick && 'cursor-pointer',
-                    getOverdueStyling()
-                  )}
+              <TableRow
+                key={reminder.id}
+                className={cn(
+                  'hover:bg-muted/50',
+                  onReminderClick && 'cursor-pointer',
+                  getOverdueStyling()
+                )}
                   onClick={() => onReminderClick?.(reminder)}
                 >
                   <TableCell className='font-medium'>
                     {truncateMessage(reminder.message)}
+                  </TableCell>
+                  <TableCell className='text-sm text-muted-foreground'>
+                    {reminder.contacts?.name || "—"}
                   </TableCell>
                   <TableCell className='text-sm'>
                     {formatDate(reminder.remind_at)}

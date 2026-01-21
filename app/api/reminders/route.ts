@@ -20,7 +20,7 @@ export async function GET() {
 
     const { data: reminders, error } = await supabase
       .from("reminders")
-      .select("*")
+      .select("*, contacts:contact_id(id, name)")
       .eq("user_id", user.id)
       .order("remind_at", { ascending: true });
 
