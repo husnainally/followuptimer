@@ -591,6 +591,12 @@ async function handler(request: Request) {
     // This should happen regardless of notification success - popups show when reminder is due
     if (dueEventResult.success && dueEventResult.eventId) {
       try {
+        logInfo("[Popup] Creating popup from reminder_due event", {
+          userId: reminder.user_id,
+          eventId: dueEventResult.eventId,
+          reminderId: reminderId,
+        });
+        
         const { createPopupsFromEvent } = await import("@/lib/popup-engine");
         await createPopupsFromEvent({
           userId: reminder.user_id,
@@ -605,15 +611,27 @@ async function handler(request: Request) {
           contactId: reminder.contact_id || undefined,
           reminderId: reminderId,
         });
+        
+        logInfo("[Popup] Popup creation completed", {
+          userId: reminder.user_id,
+          eventId: dueEventResult.eventId,
+        });
       } catch (popupError) {
         // Log but don't fail - popup creation is non-critical
-        if (!isProduction) {
-          console.warn(
-            "[Webhook] Failed to create popup from reminder_due event:",
-            popupError
-          );
-        }
+        logError(popupError, {
+          context: "[Webhook] Failed to create popup from reminder_due event",
+          userId: reminder.user_id,
+          eventId: dueEventResult.eventId,
+          reminderId: reminderId,
+        });
       }
+    } else {
+      logInfo("[Popup] Skipping popup creation - event not logged", {
+        userId: reminder.user_id,
+        reminderId: reminderId,
+        eventSuccess: dueEventResult.success,
+        eventId: dueEventResult.eventId,
+      });
     }
 
     if (!isProduction) {
