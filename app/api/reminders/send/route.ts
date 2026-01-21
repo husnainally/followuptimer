@@ -587,7 +587,7 @@ async function handler(request: Request) {
       useServiceClient: true,
     });
 
-    // Create popup from reminder_created event (simpler popup template)
+    // Create popup from reminder_due event
     // This should happen regardless of notification success - popups show when reminder is due
     if (dueEventResult.success && dueEventResult.eventId) {
       try {
@@ -595,7 +595,7 @@ async function handler(request: Request) {
         await createPopupsFromEvent({
           userId: reminder.user_id,
           eventId: dueEventResult.eventId,
-          eventType: "reminder_created",
+          eventType: "reminder_due",
           eventData: {
             reminder_id: reminderId,
             remind_at: scheduledTime.toISOString(),
@@ -608,7 +608,7 @@ async function handler(request: Request) {
         // Log but don't fail - popup creation is non-critical
         if (!isProduction) {
           console.warn(
-            "[Webhook] Failed to create popup from reminder_created event:",
+            "[Webhook] Failed to create popup from reminder_due event:",
             popupError
           );
         }
