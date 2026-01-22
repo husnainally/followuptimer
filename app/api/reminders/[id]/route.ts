@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cancelScheduledReminder, scheduleReminder } from "@/lib/qstash";
+import { processReminder } from "@/app/api/reminders/process-overdue/route";
+import { logEvent } from "@/lib/events";
 
 // Route segment config
 export const dynamic = "force-dynamic";
@@ -182,6 +184,18 @@ export async function PATCH(
     if (last_interaction_at !== undefined) updates.last_interaction_at = last_interaction_at || null;
     if (completion_context !== undefined) updates.completion_context = completion_context?.trim() || null;
 
+    // Get the original reminder to compare remind_at if it's being updated
+    let originalReminder = null;
+    if (remind_at !== undefined) {
+      const { data: original } = await supabase
+        .from("reminders")
+        .select("remind_at, status, contact_id")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .single();
+      originalReminder = original;
+    }
+
     const { data: reminder, error } = await supabase
       .from("reminders")
       .update(updates)
@@ -191,6 +205,90 @@ export async function PATCH(
       .single();
 
     if (error) throw error;
+
+    // Log reminder_updated event
+    const eventResult = await logEvent({
+      userId: user.id,
+      eventType: "reminder_updated",
+      eventData: {
+        reminder_id: reminder.id,
+        updated_fields: Object.keys(updates),
+        tone: reminder.tone,
+        notification_method: reminder.notification_method,
+        remind_at: reminder.remind_at,
+        original_remind_at: originalReminder?.remind_at || undefined,
+      },
+      source: "app",
+      reminderId: reminder.id,
+      contactId: reminder.contact_id || undefined,
+    });
+
+    // Create popups from reminder_updated event
+    if (eventResult.success && eventResult.eventId) {
+      try {
+        const { processEventForTriggers } = await import("@/lib/trigger-manager");
+        await processEventForTriggers(
+          user.id,
+          "reminder_updated",
+          eventResult.eventId,
+          { reminder_id: reminder.id }
+        );
+
+        const { createPopupsFromEvent } = await import("@/lib/popup-engine");
+        await createPopupsFromEvent({
+          userId: user.id,
+          eventId: eventResult.eventId,
+          eventType: "reminder_updated",
+          eventData: {
+            reminder_id: reminder.id,
+            message: reminder.message,
+            remind_at: reminder.remind_at,
+            notification_method: reminder.notification_method,
+            updated_fields: Object.keys(updates),
+          },
+          contactId: reminder.contact_id || undefined,
+          reminderId: reminder.id,
+        });
+      } catch (popupError) {
+        // Log but don't fail - popup creation is non-critical
+        console.warn(
+          "[Reminder Update] Failed to create popup from reminder_updated event:",
+          popupError
+        );
+      }
+    }
+
+    // Check if reminder should be processed immediately
+    // If remind_at was updated and the new time is in the past or within 5 seconds
+    if (
+      remind_at !== undefined &&
+      reminder.status !== "sent" &&
+      reminder.status !== "completed"
+    ) {
+      const newRemindAt = new Date(reminder.remind_at);
+      const now = new Date();
+      const fiveSecondsFromNow = new Date(now.getTime() + 5 * 1000);
+
+      // If the reminder time is in the past or within 5 seconds, process immediately
+      if (newRemindAt <= fiveSecondsFromNow) {
+        // Ensure status is pending before processing
+        if (reminder.status !== "pending") {
+          await supabase
+            .from("reminders")
+            .update({ status: "pending" })
+            .eq("id", reminder.id)
+            .eq("user_id", user.id);
+        }
+
+        // Process the reminder immediately (non-blocking)
+        processReminder(reminder.id).catch((error) => {
+          console.error(
+            "[Reminder Update] Failed to process reminder immediately:",
+            error
+          );
+        });
+      }
+    }
 
     // Update QStash job if remind_at changed
     const isLocalDev = process.env.NODE_ENV === "development";

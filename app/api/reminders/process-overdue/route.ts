@@ -22,7 +22,7 @@ export const runtime = 'nodejs';
  * Process a single overdue reminder
  * This function contains the core logic from /api/reminders/send
  */
-async function processReminder(reminderId: string) {
+export async function processReminder(reminderId: string) {
   const supabase = createServiceClient();
   const isProduction = process.env.NODE_ENV === 'production';
 

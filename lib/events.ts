@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 export type EventType =
   | "reminder_created"
+  | "reminder_updated"
   | "reminder_triggered"
   | "reminder_completed"
   | "reminder_snoozed"

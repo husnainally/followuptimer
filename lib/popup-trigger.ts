@@ -232,17 +232,35 @@ export async function getNextPopup(
       .in("status", ["queued", "pending"])
       .lt("expires_at", new Date().toISOString());
 
-    const { data, error } = await supabase
+    const now = new Date().toISOString();
+    const nowDate = new Date(now);
+    
+    // Fix: Multiple .or() calls don't combine in PostgREST - each replaces the previous
+    // We need: (expires_at IS NULL OR expires_at > now) AND (snooze_until IS NULL OR snooze_until <= now)
+    // Solution: Query with expires_at filter, then filter results in memory for snooze_until
+    const { data: allPopups, error: queryError } = await supabase
       .from("popups")
       .select("*")
       .eq("user_id", userId)
       .in("status", ["queued", "pending"])
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-      .or(`snooze_until.is.null,snooze_until.lte.${new Date().toISOString()}`)
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
       .order("priority", { ascending: false })
-      .order("queued_at", { ascending: true })
-      .limit(1)
-      .single();
+      .order("queued_at", { ascending: true });
+
+    if (queryError && queryError.code !== "PGRST116") {
+      throw queryError;
+    }
+
+    // Filter by snooze_until in memory: snooze_until IS NULL OR snooze_until <= now
+    const filteredPopups = (allPopups || []).filter((popup) => {
+      const snoozeUntil = popup.snooze_until ? new Date(popup.snooze_until) : null;
+      // Check snooze_until: must be null or in the past/now
+      return !snoozeUntil || snoozeUntil <= nowDate;
+    });
+
+    // Get the first popup from filtered results
+    const data = filteredPopups.length > 0 ? filteredPopups[0] : null;
+    const error = !data && allPopups && allPopups.length > 0 ? null : queryError;
 
     if (error && error.code !== "PGRST116") {
       // PGRST116 = no rows returned, which is fine
