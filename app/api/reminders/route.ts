@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { scheduleReminder } from "@/lib/qstash";
 import { logEvent } from "@/lib/events";
+import { processReminder } from "@/app/api/reminders/process-overdue/route";
 
 // Route segment config
 export const dynamic = "force-dynamic";
@@ -154,6 +155,26 @@ export async function POST(request: Request) {
       }
     }
 
+    // Check if reminder should be processed immediately
+    // If remind_at is in the past or within 5 seconds, process immediately
+    const remindAtDate = new Date(reminder.remind_at);
+    const now = new Date();
+    const fiveSecondsFromNow = new Date(now.getTime() + 5 * 1000);
+
+    // If the reminder time is in the past or within 5 seconds, process immediately
+    if (
+      reminder.status === "pending" &&
+      remindAtDate <= fiveSecondsFromNow
+    ) {
+      // Process the reminder immediately (non-blocking)
+      processReminder(reminder.id).catch((error) => {
+        console.error(
+          "[Reminder Creation] Failed to process reminder immediately:",
+          error
+        );
+      });
+    }
+
     // Schedule QStash job (if QSTASH_TOKEN is configured)
     // In local development, use localhost URL; otherwise use configured app URL
     const isLocalDev = process.env.NODE_ENV === "development";
@@ -166,15 +187,18 @@ export async function POST(request: Request) {
         ? process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         : process.env.NEXT_PUBLIC_APP_URL;
 
-    const remindAtDate = new Date(reminder.remind_at);
-    const now = new Date();
-
-    // Only schedule if time is in the future
+    // Only schedule if time is in the future (beyond 5 seconds)
     if (remindAtDate <= now) {
       console.warn("[QStash] Cannot schedule reminder in the past:", {
         reminderId: reminder.id,
         remindAt: reminder.remind_at,
         now: now.toISOString(),
+      });
+    } else if (remindAtDate <= fiveSecondsFromNow) {
+      // Reminder is within 5 seconds - already processing immediately above
+      console.log("[QStash] Skipping QStash scheduling - processing immediately:", {
+        reminderId: reminder.id,
+        remindAt: reminder.remind_at,
       });
     } else if (process.env.QSTASH_TOKEN && appUrl) {
       try {
