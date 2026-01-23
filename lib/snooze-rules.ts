@@ -209,7 +209,8 @@ export function getNextWorkingDay(
 }
 
 /**
- * Count reminders scheduled for today (in user's timezone)
+ * Count reminders sent/delivered today (in user's timezone)
+ * Used for daily cap enforcement - counts how many reminders have already been sent today
  */
 export async function countRemindersToday(
   userId: string,
@@ -238,12 +239,19 @@ export async function countRemindersToday(
         new Date(now.toLocaleString("en-US", { timeZone: timezone })).getTime())
   );
 
+  // Calculate end of day (start of tomorrow)
+  const endOfDayInTZ = new Date(startOfDayInTZ);
+  endOfDayInTZ.setDate(endOfDayInTZ.getDate() + 1);
+
+  // Count reminders that have been SENT today (not pending ones)
+  // This is used for daily cap - we want to know how many reminders already fired
   const { count } = await supabase
     .from("reminders")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("status", "pending")
-    .gte("remind_at", startOfDayInTZ.toISOString());
+    .in("status", ["sent", "completed"])
+    .gte("remind_at", startOfDayInTZ.toISOString())
+    .lt("remind_at", endOfDayInTZ.toISOString());
 
   return count || 0;
 }
