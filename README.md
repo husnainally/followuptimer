@@ -1,24 +1,20 @@
-# ⏰ FollowUpTimer 
+# ⏰ FollowUpTimer
 
-A smart reminder application with motivational affirmations, built with Next.js, Supabase, Resend, and QStash. 
-    
-## ✨ Features      
-                  
-- 🔐 **Authentication** - Secure email/password auth with Supabase 
+A smart reminder application with motivational affirmations, built with Next.js, Supabase, Resend, and QStash.
+
+## ✨ Features
+
+- 🔐 **Authentication** - Secure email/password auth with Supabase
 - 📅 **Smart Reminders** - Schedule reminders with custom dates and times
-- 💬 **Affirmations** - Choose from motivational, professional, or playful tones       
+- 💬 **Affirmations** - Choose from motivational, professional, or playful tones
 - 📧 **Email Notifications** - Beautiful emails powered by Resend
 - 📬 **Email Open Tracking** - Know when recipients open your reminder emails
-- ⏱️ **QStash Scheduling** - Reliable reminder delivery with Upstash QStash     
+- ⏱️ **QStash Scheduling** - Reliable reminder delivery with Upstash QStash
 - 📊 **Dashboard** - Track all your reminders in one place
 - 📋 **Waitlist System** - Complete pre-launch signup flow with welcome emails
 - 👨‍💼 **Admin Panel** - Manage waitlist entries and export data
 - 🎨 **Modern UI** - Clean, responsive interface with Tailwind CSS
 - 🌙 **Dark Mode** - Full dark mode support
-
-
-
-
 
 ## 🚀 Quick Start
 
@@ -38,23 +34,23 @@ git clone <your-repo-url>
 cd followuptimer
 ```
 
-2. Install dependencies:
+1. Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Copy `.env.example` to `.env.local` and configure:
+1. Copy `.env.example` to `.env.local` and configure:
 
 ```bash
 cp .env.example .env.local
 ```
 
-4. Set up your environment variables (see [SETUP.md](./SETUP.md) for detailed instructions)
+1. Set up your environment variables (see [SETUP.md](./SETUP.md) for detailed instructions)
 
-5. Run database migrations in Supabase SQL Editor
+2. Run database migrations in Supabase SQL Editor
 
-6. Start the development server:
+3. Start the development server:
 
 ```bash
 npm run dev
@@ -129,6 +125,7 @@ vercel
 ```
 
 Remember to:
+
 - Add environment variables in Vercel dashboard
 - Update `NEXT_PUBLIC_APP_URL` to your production URL
 - Run database migrations in Supabase
