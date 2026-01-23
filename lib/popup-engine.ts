@@ -264,8 +264,8 @@ async function ensureDefaultPopupRules(userId: string): Promise<void> {
       trigger_event_type: "reminder_due",
       template_key: "reminder_due",
       priority: 8,
-      cooldown_seconds: 60 * 15,
-      max_per_day: 10,
+      cooldown_seconds: 30, // Reduced from 15 minutes to 30 seconds
+      max_per_day: 50, // Increased from 10 to 50 per day
       ttl_seconds: 60 * 60 * 24,
       enabled: true,
       conditions: { require_reminder_id: true },
