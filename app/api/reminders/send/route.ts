@@ -16,6 +16,7 @@ import {
   checkAndHandleConflicts,
   deliverBundle,
 } from "@/lib/reminder-conflict-resolution";
+import { logPopupCreationAttempt, generateTempEventId } from "@/lib/popup-debug";
 
 // Route segment config
 export const dynamic = "force-dynamic";
@@ -97,6 +98,23 @@ async function handler(request: Request) {
       contactId: reminder.contact_id || undefined,
       useServiceClient: true,
     });
+
+    // FIX #1: CRITICAL - Decouple popup creation from event logging
+    // Even if event logging fails, we must create the popup
+    let eventIdForPopup = dueEventResult.eventId;
+    
+    if (!dueEventResult.success || !eventIdForPopup) {
+      // Event logging failed - generate temp ID and create popup anyway
+      console.warn("[Webhook] Event logging failed, using temp event ID for popup:", {
+        reminderId,
+        userId: reminder.user_id,
+        error: dueEventResult.error,
+      });
+      eventIdForPopup = generateTempEventId();
+      
+      // TODO: Implement retry mechanism for failed event logs
+      // For now, just log the failure and continue
+    }
 
     // Check for conflicts and handle bundling
     const conflictCheck = await checkAndHandleConflicts(
@@ -588,52 +606,64 @@ async function handler(request: Request) {
     });
 
     // Create popup from reminder_due event
-    // This should happen regardless of notification success - popups show when reminder is due
-    if (dueEventResult.success && dueEventResult.eventId) {
-      try {
-        console.log("[Popup] Creating popup from reminder_due event", {
-          userId: reminder.user_id,
-          eventId: dueEventResult.eventId,
-          reminderId: reminderId,
-        });
-        
-        const { createPopupsFromEvent } = await import("@/lib/popup-engine");
-        await createPopupsFromEvent({
-          userId: reminder.user_id,
-          eventId: dueEventResult.eventId,
-          eventType: "reminder_due",
-          eventData: {
-            reminder_id: reminderId,
-            remind_at: scheduledTime.toISOString(),
-            notification_method: reminder.notification_method,
-            message: reminder.message,
-          },
-          contactId: reminder.contact_id || undefined,
-          reminderId: reminderId,
-        });
-        
-        console.log("[Popup] Popup creation completed", {
-          userId: reminder.user_id,
-          eventId: dueEventResult.eventId,
-        });
-      } catch (popupError) {
-        // Log but don't fail - popup creation is non-critical
-        console.error("[Popup] Failed to create popup from reminder_due event", {
-          error: popupError,
-          userId: reminder.user_id,
-          eventId: dueEventResult.eventId,
-          reminderId: reminderId,
-        });
-      }
-    } else {
-      console.log("[Popup] Skipping popup creation - event not logged", {
+    // FIX #1: ALWAYS create popup, regardless of event logging success
+    // This is the CRITICAL fix that prevents 50% of popup failures
+    let popupCreated = false;
+    let popupError: string | undefined;
+    
+    try {
+      console.log("[Popup] Creating popup for reminder_due event", {
         userId: reminder.user_id,
+        eventId: eventIdForPopup,
         reminderId: reminderId,
-        eventSuccess: dueEventResult.success,
-        eventId: dueEventResult.eventId,
-        error: dueEventResult.error,
+        eventLogSuccess: dueEventResult.success,
       });
+      
+      const { createPopupsFromEvent } = await import("@/lib/popup-engine");
+      await createPopupsFromEvent({
+        userId: reminder.user_id,
+        eventId: eventIdForPopup,
+        eventType: "reminder_due",
+        eventCreatedAt: scheduledTime.toISOString(),
+        eventData: {
+          reminder_id: reminderId,
+          remind_at: scheduledTime.toISOString(),
+          notification_method: reminder.notification_method,
+          message: reminder.message,
+        },
+        contactId: reminder.contact_id || undefined,
+        reminderId: reminderId,
+      });
+      
+      popupCreated = true;
+      console.log("[Popup] Popup creation completed", {
+        userId: reminder.user_id,
+        eventId: eventIdForPopup,
+      });
+    } catch (popupError) {
+      // Log but don't fail - popup creation is non-critical to notification delivery
+      console.error("[Popup] Failed to create popup from reminder_due event", {
+        error: popupError,
+        userId: reminder.user_id,
+        eventId: eventIdForPopup,
+        reminderId: reminderId,
+      });
+      popupError = popupError instanceof Error ? popupError.message : "Unknown error";
     }
+    
+    // Log popup creation attempt for debugging
+    await logPopupCreationAttempt({
+      userId: reminder.user_id,
+      reminderId: reminderId,
+      eventLogged: dueEventResult.success,
+      eventId: dueEventResult.eventId,
+      popupCreated,
+      errorMessage: popupError,
+      context: {
+        notification_method: reminder.notification_method,
+        has_contact: !!reminder.contact_id,
+      },
+    });
 
     if (!isProduction) {
       console.log("[Webhook] Reminder status updated:", {

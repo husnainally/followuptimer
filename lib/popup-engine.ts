@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { type EventType } from "@/lib/events";
 import { getAffirmationForUser } from "@/lib/affirmation-engine";
+import { logPopupBlock } from "@/lib/popup-debug";
 
 export type PopupActionType =
   | "FOLLOW_UP_NOW"
@@ -343,27 +344,58 @@ async function passesEligibility(args: {
   sourceEventId: string;
   contactId?: string;
   reminderId?: string;
-}): Promise<{ ok: boolean; reason?: string }> {
+}): Promise<{ ok: boolean; reason?: string; context?: Record<string, unknown> }> {
   const supabase = createServiceClient();
 
   // Feature enabled / plan checks (MVP: require active plan_status; otherwise allow)
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("plan_status, in_app_notifications")
     .eq("id", args.userId)
     .single();
 
+  // FIX #2: Graceful handling of profile fetch failures
+  if (profileError || !profile) {
+    // Profile fetch failed - log warning and allow popup (fail-open policy)
+    console.warn("[PopupEngine] Profile fetch failed, allowing popup:", {
+      userId: args.userId,
+      error: profileError?.message,
+    });
+    // Don't block popup if we can't verify profile - better to show than miss
+    return { ok: true, context: { profile_fetch_failed: true } };
+  }
+
   if (
-    profile?.plan_status &&
+    profile.plan_status &&
     profile.plan_status !== "active" &&
     profile.plan_status !== "trial"
   ) {
-    return { ok: false, reason: "plan_inactive" };
+    // Log block for debugging
+    await logPopupBlock({
+      userId: args.userId,
+      ruleId: args.rule.id,
+      sourceEventId: args.sourceEventId,
+      contactId: args.contactId,
+      reminderId: args.reminderId,
+      reason: "plan_inactive",
+      context: { plan_status: profile.plan_status },
+    });
+    return { ok: false, reason: "plan_inactive", context: { plan_status: profile.plan_status } };
   }
 
   // User preference check: if they explicitly disabled in-app notifications, treat as popups disabled
-  if (profile?.in_app_notifications === false) {
-    return { ok: false, reason: "popups_disabled" };
+  if (profile.in_app_notifications === false) {
+    // Log block for debugging
+    await logPopupBlock({
+      userId: args.userId,
+      ruleId: args.rule.id,
+      sourceEventId: args.sourceEventId,
+      contactId: args.contactId,
+      reminderId: args.reminderId,
+      reason: "popups_disabled",
+      context: { in_app_notifications: false },
+    });
+    return { ok: false, reason: "popups_disabled", context: { in_app_notifications: false } };
   }
 
   // DND (Do Not Disturb) check - check user preferences for DND settings
@@ -384,10 +416,26 @@ async function passesEligibility(args: {
 
   const conditions = (args.rule.conditions || {}) as Record<string, unknown>;
   if (conditions.require_contact_id === true && !args.contactId) {
+    await logPopupBlock({
+      userId: args.userId,
+      ruleId: args.rule.id,
+      sourceEventId: args.sourceEventId,
+      reminderId: args.reminderId,
+      reason: "missing_contact_id",
+      context: { rule_name: args.rule.rule_name },
+    });
     return { ok: false, reason: "missing_contact_id" };
   }
 
   if (conditions.require_reminder_id === true && !args.reminderId) {
+    await logPopupBlock({
+      userId: args.userId,
+      ruleId: args.rule.id,
+      sourceEventId: args.sourceEventId,
+      contactId: args.contactId,
+      reason: "missing_reminder_id",
+      context: { rule_name: args.rule.rule_name },
+    });
     return { ok: false, reason: "missing_reminder_id" };
   }
 
@@ -400,6 +448,15 @@ async function passesEligibility(args: {
     .limit(1);
 
   if (existing && existing.length > 0) {
+    await logPopupBlock({
+      userId: args.userId,
+      ruleId: args.rule.id,
+      sourceEventId: args.sourceEventId,
+      contactId: args.contactId,
+      reminderId: args.reminderId,
+      reason: "dedupe_source_event",
+      context: { existing_popup_id: existing[0].id },
+    });
     return { ok: false, reason: "dedupe_source_event" };
   }
 
@@ -419,8 +476,21 @@ async function passesEligibility(args: {
       .in("status", ["displayed", "shown"])
       .gte("displayed_at", cutoff)
       .limit(1);
-    if (recent && recent.length > 0)
+    if (recent && recent.length > 0) {
+      await logPopupBlock({
+        userId: args.userId,
+        ruleId: args.rule.id,
+        sourceEventId: args.sourceEventId,
+        contactId: args.contactId,
+        reminderId: args.reminderId,
+        reason: "global_cooldown",
+        context: { 
+          cooldown_seconds: globalCooldownSeconds,
+          recent_popup_id: recent[0].id,
+        },
+      });
       return { ok: false, reason: "global_cooldown" };
+    }
   }
 
   // Per-rule cooldown
@@ -441,8 +511,22 @@ async function passesEligibility(args: {
       ])
       .gte("displayed_at", cutoff)
       .limit(1);
-    if (recent && recent.length > 0)
+    if (recent && recent.length > 0) {
+      await logPopupBlock({
+        userId: args.userId,
+        ruleId: args.rule.id,
+        sourceEventId: args.sourceEventId,
+        contactId: args.contactId,
+        reminderId: args.reminderId,
+        reason: "rule_cooldown",
+        context: { 
+          cooldown_seconds: perRuleCooldown,
+          rule_name: args.rule.rule_name,
+          recent_popup_id: recent[0].id,
+        },
+      });
       return { ok: false, reason: "rule_cooldown" };
+    }
   }
 
   // Per-entity cap (per day)
@@ -455,8 +539,22 @@ async function passesEligibility(args: {
       .eq("rule_id", args.rule.id)
       .eq("contact_id", args.contactId)
       .gte("queued_at", start);
-    if ((count || 0) >= args.rule.max_per_day)
+    if ((count || 0) >= args.rule.max_per_day) {
+      await logPopupBlock({
+        userId: args.userId,
+        ruleId: args.rule.id,
+        sourceEventId: args.sourceEventId,
+        contactId: args.contactId,
+        reminderId: args.reminderId,
+        reason: "entity_cap",
+        context: { 
+          max_per_day: args.rule.max_per_day,
+          current_count: count,
+          rule_name: args.rule.rule_name,
+        },
+      });
       return { ok: false, reason: "entity_cap" };
+    }
   }
 
   return { ok: true };
@@ -534,15 +632,48 @@ export async function createPopupsFromEvent(
       .select("id")
       .single();
 
-    // If insert fails due to dedupe unique constraint, silently ignore.
+    // FIX #4: Better error handling for dedupe and DB errors
     if (insertError) {
       const msg = insertError.message || "";
+      const code = insertError.code || "";
+      
+      // If dedupe constraint violation, this is expected - log and return silently
       if (
         msg.toLowerCase().includes("duplicate") ||
-        msg.toLowerCase().includes("unique")
+        msg.toLowerCase().includes("unique") ||
+        code === "23505" // PostgreSQL unique violation code
       ) {
+        console.log("[PopupEngine] Popup already exists (dedupe):", {
+          userId: input.userId,
+          eventId: input.eventId,
+        });
+        await logPopupBlock({
+          userId: input.userId,
+          ruleId: rule.id,
+          sourceEventId: input.eventId,
+          contactId: input.contactId,
+          reminderId: input.reminderId,
+          reason: "dedupe_db_constraint",
+          context: { error_code: code, error_message: msg },
+        });
         return;
       }
+      
+      // Other DB errors - log and throw for visibility
+      console.error("[PopupEngine] Failed to insert popup:", {
+        userId: input.userId,
+        eventId: input.eventId,
+        error: insertError,
+      });
+      await logPopupBlock({
+        userId: input.userId,
+        ruleId: rule.id,
+        sourceEventId: input.eventId,
+        contactId: input.contactId,
+        reminderId: input.reminderId,
+        reason: "db_insert_error",
+        context: { error_code: code, error_message: msg },
+      });
       throw insertError;
     }
 
