@@ -342,6 +342,7 @@ async function passesEligibility(args: {
   rule: PopupRuleRow;
   sourceEventId: string;
   contactId?: string;
+  reminderId?: string;
 }): Promise<{ ok: boolean; reason?: string }> {
   const supabase = createServiceClient();
 
@@ -384,6 +385,10 @@ async function passesEligibility(args: {
   const conditions = (args.rule.conditions || {}) as Record<string, unknown>;
   if (conditions.require_contact_id === true && !args.contactId) {
     return { ok: false, reason: "missing_contact_id" };
+  }
+
+  if (conditions.require_reminder_id === true && !args.reminderId) {
+    return { ok: false, reason: "missing_reminder_id" };
   }
 
   // Dedupe is enforced by DB unique index on (user_id, source_event_id), but we also short-circuit.
@@ -486,6 +491,7 @@ export async function createPopupsFromEvent(
       rule,
       sourceEventId: input.eventId,
       contactId: input.contactId,
+      reminderId: input.reminderId,
     });
     if (!eligibility.ok) continue;
 
