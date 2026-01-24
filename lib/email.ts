@@ -75,24 +75,30 @@ export async function sendReminderEmail({
     if (result.data?.id && userId) {
       try {
         const supabase = createServiceClient();
+        // Determine email type based on context
+        const emailType = contactId
+          ? 'follow_up_to_contact'
+          : 'reminder_to_self';
+
         await supabase.from('sent_emails').insert({
           user_id: userId,
           contact_id: contactId || null,
           reminder_id: reminderId || null,
           resend_email_id: result.data.id,
           recipient_email: to,
-          email_type: 'reminder',
+          email_type: emailType,
           sent_at: new Date().toISOString(),
         });
         console.log('[Email] Stored email metadata for open tracking:', {
           emailId: result.data.id,
           userId,
+          emailType,
         });
       } catch (trackingError) {
         // Don't fail the email send if tracking fails
         console.warn(
           '[Email] Failed to store email tracking metadata:',
-          trackingError
+          trackingError,
         );
       }
     }
@@ -113,7 +119,7 @@ export async function sendReminderEmail({
 function escapeHtml(str: string) {
   return str.replace(
     /[&<>"]+/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!)
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!,
   );
 }
 
@@ -122,7 +128,7 @@ function escapeHtml(str: string) {
  */
 function generateReminderEmailHTML(
   affirmation: string,
-  message: string
+  message: string,
 ): string {
   return `
     <!DOCTYPE html>
@@ -235,7 +241,7 @@ function generateReminderEmailHTML(
         <div class="affirmation-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
           <div class="affirmation-emoji" style="font-size: 40px; margin-bottom: 16px;">✨</div>
           <p class="affirmation-text" style="color: black; font-size: 18px; line-height: 1.6; margin: 0; font-weight: 600; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);">${escapeHtml(
-            affirmation
+            affirmation,
           )}</p>
         </div>
         
@@ -247,7 +253,7 @@ function generateReminderEmailHTML(
           </div>
           <div class="reminder-content" style="background: #f8f9fa; border-left: 4px solid #667eea; border-radius: 4px; padding: 20px; margin-top: 16px;">
             <p class="reminder-text" style="font-size: 16px; line-height: 1.6; color: #333; margin: 0; word-wrap: break-word;">${escapeHtml(
-              message
+              message,
             )}</p>
           </div>
         </div>

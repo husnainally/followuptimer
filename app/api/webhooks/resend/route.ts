@@ -18,7 +18,7 @@ export const runtime = 'nodejs';
 /**
  * Verify Resend webhook signature (Svix format)
  * Resend uses Svix for webhook delivery, which uses HMAC SHA256 with Base64 encoding
- * 
+ *
  * Signature format:
  * - Headers: svix-id, svix-timestamp, svix-signature
  * - Signed content: {svix-id}.{svix-timestamp}.{raw_body}
@@ -26,13 +26,13 @@ export const runtime = 'nodejs';
  */
 async function verifyWebhookSignature(
   body: string,
-  headers: Headers
+  headers: Headers,
 ): Promise<boolean> {
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
     console.warn(
-      '[Resend Webhook] RESEND_WEBHOOK_SECRET not configured - skipping verification'
+      '[Resend Webhook] RESEND_WEBHOOK_SECRET not configured - skipping verification',
     );
     // In production, this should be strict
     return process.env.NODE_ENV !== 'production';
@@ -59,14 +59,18 @@ async function verifyWebhookSignature(
       const keyB64 = webhookSecret.substring(6); // Remove 'whsec_' prefix
       try {
         secretKey = Buffer.from(keyB64, 'base64');
-        console.log('[Resend Webhook] Using whsec_ format secret (decoded from base64)');
+        console.log(
+          '[Resend Webhook] Using whsec_ format secret (decoded from base64)',
+        );
       } catch (error) {
         console.error('[Resend Webhook] Failed to decode secret key:', error);
         return false;
       }
     } else {
       // Fallback: assume the secret is already the raw key (for backwards compatibility)
-      console.warn('[Resend Webhook] Secret does not start with whsec_ - using as raw UTF-8 key');
+      console.warn(
+        '[Resend Webhook] Secret does not start with whsec_ - using as raw UTF-8 key',
+      );
       secretKey = Buffer.from(webhookSecret, 'utf8');
     }
 
@@ -94,7 +98,7 @@ async function verifyWebhookSignature(
         expectedSignature.length === receivedSignature.length &&
         crypto.timingSafeEqual(
           Buffer.from(expectedSignature),
-          Buffer.from(receivedSignature)
+          Buffer.from(receivedSignature),
         )
       ) {
         // Step 5: Validate timestamp freshness (prevent replay attacks)
@@ -116,12 +120,15 @@ async function verifyWebhookSignature(
       }
     }
 
-    console.error('[Resend Webhook] Signature verification failed - no matching signature', {
-      expectedLength: expectedSignature.length,
-      receivedSignatures: signatures.length,
-      svixId: svixId.substring(0, 20) + '...',
-      timestamp: svixTimestamp,
-    });
+    console.error(
+      '[Resend Webhook] Signature verification failed - no matching signature',
+      {
+        expectedLength: expectedSignature.length,
+        receivedSignatures: signatures.length,
+        svixId: svixId.substring(0, 20) + '...',
+        timestamp: svixTimestamp,
+      },
+    );
     return false;
   } catch (error) {
     console.error('[Resend Webhook] Signature verification error:', error);
@@ -157,6 +164,22 @@ async function handleEmailOpened(data: {
       };
     }
 
+    // Only track opens for follow-up emails sent to contacts
+    // Skip reminders sent to the user themselves (reminder_to_self)
+    if (sentEmail.email_type === 'reminder_to_self') {
+      console.log(
+        '[Resend Webhook] Skipping open tracking for reminder email:',
+        {
+          emailId: data.email_id,
+          emailType: sentEmail.email_type,
+        },
+      );
+      return {
+        success: true,
+        error: 'Reminder emails not tracked (user opened own reminder)',
+      };
+    }
+
     // Check if this is the first open (we only track first open)
     if (sentEmail.opened_at) {
       console.log('[Resend Webhook] Email already marked as opened:', {
@@ -184,7 +207,7 @@ async function handleEmailOpened(data: {
     if (updateError) {
       console.error(
         '[Resend Webhook] Failed to update sent_emails:',
-        updateError
+        updateError,
       );
       return {
         success: false,
@@ -220,7 +243,7 @@ async function handleEmailOpened(data: {
         // Don't fail webhook if contact update fails
         console.warn(
           '[Resend Webhook] Failed to update contact:',
-          contactError
+          contactError,
         );
       }
     }
@@ -327,7 +350,7 @@ export async function POST(request: Request) {
         if (!result.success) {
           console.warn(
             '[Resend Webhook] Failed to handle email.opened:',
-            result.error
+            result.error,
           );
           // Return 200 anyway to prevent Resend from retrying
           // (we've already logged the error)
