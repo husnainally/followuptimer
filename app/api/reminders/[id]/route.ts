@@ -189,11 +189,16 @@ export async function PATCH(
     if (remind_at !== undefined) {
       const { data: original } = await supabase
         .from("reminders")
-        .select("remind_at, status, contact_id")
+        .select("remind_at, status, contact_id, qstash_message_id")
         .eq("id", id)
         .eq("user_id", user.id)
         .single();
       originalReminder = original;
+      
+      // If original status was "sent" and remind_at is changing, reset to "pending"
+      if (originalReminder?.status === "sent" && status === undefined) {
+        updates.status = "pending";
+      }
     }
 
     const { data: reminder, error } = await supabase
@@ -260,10 +265,10 @@ export async function PATCH(
 
     // Check if reminder should be processed immediately
     // If remind_at was updated and the new time is in the past or within 5 seconds
+    // Process for both "sent" and "pending" reminders (not "completed")
     if (
       remind_at !== undefined &&
-      reminder.status !== "sent" &&
-      reminder.status !== "completed"
+      originalReminder?.status !== "completed"
     ) {
       const newRemindAt = new Date(reminder.remind_at);
       const now = new Date();
@@ -301,13 +306,13 @@ export async function PATCH(
         ? process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         : process.env.NEXT_PUBLIC_APP_URL;
 
-    // Only reschedule if remind_at changed and reminder is not completed/sent
+    // Reschedule if remind_at changed and reminder is not completed
+    // Allow rescheduling for both "sent" and "pending" reminders
     if (
       remind_at !== undefined &&
       process.env.QSTASH_TOKEN &&
       appUrl &&
-      reminder.status !== "sent" &&
-      reminder.status !== "completed"
+      originalReminder?.status !== "completed"
     ) {
       try {
         const newRemindAt = new Date(reminder.remind_at);
@@ -315,9 +320,9 @@ export async function PATCH(
         
         // Only schedule if the time is in the future
         if (newRemindAt > now) {
-          // Cancel existing job if it exists
-          if (reminder.qstash_message_id) {
-            await cancelScheduledReminder(reminder.qstash_message_id).catch(
+          // Cancel existing job if it exists (use original qstash_message_id)
+          if (originalReminder?.qstash_message_id) {
+            await cancelScheduledReminder(originalReminder.qstash_message_id).catch(
               (err) => {
                 console.warn("Failed to cancel existing QStash job:", err);
                 // Continue anyway - we'll create a new one
