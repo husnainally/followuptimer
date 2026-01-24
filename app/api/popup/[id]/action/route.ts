@@ -1,19 +1,19 @@
 // Aligned route for /popup/:id/action - uses same implementation as /api/popups/:id/action
 // This provides the aligned endpoint path per requirements
-import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
-import { logEvent } from "@/lib/events";
+import { createClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+import { logEvent } from '@/lib/events';
 
 // Route segment config
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 function getString(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
+  return typeof v === 'string' && v.length > 0 ? v : null;
 }
 
 function getStringFromRecord(obj: unknown, key: string): string | null {
-  if (!obj || typeof obj !== "object") return null;
+  if (!obj || typeof obj !== 'object') return null;
   return getString((obj as Record<string, unknown>)[key]);
 }
 
@@ -21,7 +21,7 @@ function getStringFromRecord(obj: unknown, key: string): string | null {
 // Re-uses the same logic as /api/popups/:id/action for consistency
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -31,7 +31,7 @@ export async function POST(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -39,32 +39,32 @@ export async function POST(
 
     if (!action_type) {
       return NextResponse.json(
-        { error: "action_type is required" },
-        { status: 400 }
+        { error: 'action_type is required' },
+        { status: 400 },
       );
     }
 
     // Get popup to verify ownership
     const { data: popup, error: fetchError } = await supabase
-      .from("popups")
-      .select("*")
-      .eq("id", id)
-      .eq("user_id", user.id)
+      .from('popups')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (fetchError || !popup) {
-      return NextResponse.json({ error: "Popup not found" }, { status: 404 });
+      return NextResponse.json({ error: 'Popup not found' }, { status: 404 });
     }
 
     // Prevent duplicate actions - check if popup already processed
     if (
-      popup.status === "acted" ||
-      popup.status === "dismissed" ||
-      popup.status === "action_taken"
+      popup.status === 'acted' ||
+      popup.status === 'dismissed' ||
+      popup.status === 'action_taken'
     ) {
       return NextResponse.json(
-        { error: "Popup action already processed", popup },
-        { status: 409 } // Conflict
+        { error: 'Popup action already processed', popup },
+        { status: 409 }, // Conflict
       );
     }
 
@@ -72,13 +72,13 @@ export async function POST(
 
     // Update popup status (acted) + store action_taken
     const { data: updatedPopup, error: updateError } = await supabase
-      .from("popups")
+      .from('popups')
       .update({
-        status: "acted",
+        status: 'acted',
         action_taken: normalizedAction,
         closed_at: new Date().toISOString(),
       })
-      .eq("id", id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -87,7 +87,7 @@ export async function POST(
     // Log popup_action event
     await logEvent({
       userId: user.id,
-      eventType: "popup_action_clicked",
+      eventType: 'popup_action_clicked',
       eventData: {
         popup_id: id,
         action_type: normalizedAction,
@@ -97,11 +97,11 @@ export async function POST(
     });
 
     // Handle action-specific logic
-    if (normalizedAction === "FOLLOW_UP_NOW") {
+    if (normalizedAction === 'FOLLOW_UP_NOW') {
       const actionUrl =
-        getStringFromRecord(popup.payload, "thread_link") ||
-        getStringFromRecord(popup.action_data, "action_url") ||
-        getStringFromRecord(action_data, "action_url");
+        getStringFromRecord(popup.payload, 'thread_link') ||
+        getStringFromRecord(popup.action_data, 'action_url') ||
+        getStringFromRecord(action_data, 'action_url');
 
       return NextResponse.json({
         success: true,
@@ -111,100 +111,100 @@ export async function POST(
     }
 
     if (
-      (normalizedAction === "MARK_DONE" || normalizedAction === "COMPLETE") &&
+      (normalizedAction === 'MARK_DONE' || normalizedAction === 'COMPLETE') &&
       popup.reminder_id
     ) {
       // Mark reminder as completed
       await supabase
-        .from("reminders")
-        .update({ status: "sent" })
-        .eq("id", popup.reminder_id);
+        .from('reminders')
+        .update({ status: 'completed' })
+        .eq('id', popup.reminder_id);
 
       await logEvent({
         userId: user.id,
-        eventType: "task_completed",
+        eventType: 'task_completed',
         eventData: {
           popup_id: id,
           reminder_id: popup.reminder_id,
         },
-        source: "app",
+        source: 'app',
         reminderId: popup.reminder_id,
         useServiceClient: true,
       });
-    } else if (normalizedAction === "SNOOZE" && popup.reminder_id) {
+    } else if (normalizedAction === 'SNOOZE' && popup.reminder_id) {
       // Check if reminder is already sent/completed - don't allow snoozing
       const { data: reminder } = await supabase
-        .from("reminders")
-        .select("status")
-        .eq("id", popup.reminder_id)
-        .eq("user_id", user.id)
+        .from('reminders')
+        .select('status')
+        .eq('id', popup.reminder_id)
+        .eq('user_id', user.id)
         .single();
 
-      if (reminder?.status === "sent" || reminder?.status === "completed") {
+      if (reminder?.status === 'sent' || reminder?.status === 'completed') {
         return NextResponse.json(
-          { error: "Cannot snooze a reminder that has already been sent" },
-          { status: 400 }
+          { error: 'Cannot snooze a reminder that has already been sent' },
+          { status: 400 },
         );
       }
 
       const minutes =
-        typeof action_data?.minutes === "number" ? action_data.minutes : 60;
+        typeof action_data?.minutes === 'number' ? action_data.minutes : 60;
       const scheduledTime =
-        typeof action_data?.scheduled_time === "string"
+        typeof action_data?.scheduled_time === 'string'
           ? action_data.scheduled_time
           : undefined;
 
       const computedSnoozeUntil =
         scheduledTime ||
-        (typeof snooze_until === "string"
+        (typeof snooze_until === 'string'
           ? snooze_until
           : new Date(Date.now() + minutes * 60 * 1000).toISOString());
 
       // Persist snooze on popup instance
       await supabase
-        .from("popups")
+        .from('popups')
         .update({ snooze_until: computedSnoozeUntil })
-        .eq("id", id)
-        .eq("user_id", user.id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       // Trigger snooze API for reminder scheduling
       await fetch(
         `${
-          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+          process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
         }/api/reminders/${popup.reminder_id}/snooze`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             minutes: scheduledTime ? undefined : minutes,
             scheduled_time: scheduledTime,
           }),
-        }
+        },
       );
 
       await logEvent({
         userId: user.id,
-        eventType: "popup_snoozed",
+        eventType: 'popup_snoozed',
         eventData: {
           popup_id: id,
           snooze_until: computedSnoozeUntil,
           minutes,
           reminder_id: popup.reminder_id,
         },
-        source: "app",
+        source: 'app',
         reminderId: popup.reminder_id,
         useServiceClient: true,
       });
 
       await logEvent({
         userId: user.id,
-        eventType: "reminder_scheduled",
+        eventType: 'reminder_scheduled',
         eventData: {
           reminder_id: popup.reminder_id,
           snooze_until: computedSnoozeUntil,
           minutes,
         },
-        source: "app",
+        source: 'app',
         reminderId: popup.reminder_id,
         useServiceClient: true,
       });
@@ -215,9 +215,9 @@ export async function POST(
       popup: updatedPopup,
     });
   } catch (error: unknown) {
-    console.error("Failed to handle popup action:", error);
+    console.error('Failed to handle popup action:', error);
     const message =
-      error instanceof Error ? error.message : "Failed to handle popup action";
+      error instanceof Error ? error.message : 'Failed to handle popup action';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

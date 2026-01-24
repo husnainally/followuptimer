@@ -1,24 +1,24 @@
-import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
-import { logEvent } from "@/lib/events";
+import { createClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+import { logEvent } from '@/lib/events';
 
 // Route segment config
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 function getString(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
+  return typeof v === 'string' && v.length > 0 ? v : null;
 }
 
 function getStringFromRecord(obj: unknown, key: string): string | null {
-  if (!obj || typeof obj !== "object") return null;
+  if (!obj || typeof obj !== 'object') return null;
   return getString((obj as Record<string, unknown>)[key]);
 }
 
 // POST /api/popups/[id]/action - Handle popup action (complete/snooze/follow-up)
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -28,7 +28,7 @@ export async function POST(
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -36,32 +36,32 @@ export async function POST(
 
     if (!action_type) {
       return NextResponse.json(
-        { error: "action_type is required" },
-        { status: 400 }
+        { error: 'action_type is required' },
+        { status: 400 },
       );
     }
 
     // Get popup to verify ownership
     const { data: popup, error: fetchError } = await supabase
-      .from("popups")
-      .select("*")
-      .eq("id", id)
-      .eq("user_id", user.id)
+      .from('popups')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (fetchError || !popup) {
-      return NextResponse.json({ error: "Popup not found" }, { status: 404 });
+      return NextResponse.json({ error: 'Popup not found' }, { status: 404 });
     }
 
     // Prevent duplicate actions - check if popup already processed
     if (
-      popup.status === "acted" ||
-      popup.status === "dismissed" ||
-      popup.status === "action_taken"
+      popup.status === 'acted' ||
+      popup.status === 'dismissed' ||
+      popup.status === 'action_taken'
     ) {
       return NextResponse.json(
-        { error: "Popup action already processed", popup },
-        { status: 409 } // Conflict
+        { error: 'Popup action already processed', popup },
+        { status: 409 }, // Conflict
       );
     }
 
@@ -69,13 +69,13 @@ export async function POST(
 
     // Update popup status (acted) + store action_taken
     const { data: updatedPopup, error: updateError } = await supabase
-      .from("popups")
+      .from('popups')
       .update({
-        status: "acted",
+        status: 'acted',
         action_taken: normalizedAction,
         closed_at: new Date().toISOString(),
       })
-      .eq("id", id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -86,7 +86,7 @@ export async function POST(
     if (hadAffirmation) {
       await logEvent({
         userId: user.id,
-        eventType: "affirmation_action_clicked",
+        eventType: 'affirmation_action_clicked',
         eventData: {
           popup_id: id,
           popup_instance_id: id,
@@ -94,7 +94,7 @@ export async function POST(
           had_affirmation: true,
           affirmation_id: null, // Could extract from popup if needed
         },
-        source: "app",
+        source: 'app',
         reminderId: popup.reminder_id || undefined,
         contactId: popup.contact_id || undefined,
         useServiceClient: true,
@@ -102,7 +102,7 @@ export async function POST(
     }
 
     // Record action
-    const { error: actionError } = await supabase.from("popup_actions").insert({
+    const { error: actionError } = await supabase.from('popup_actions').insert({
       popup_id: id,
       user_id: user.id,
       action_type: normalizedAction,
@@ -114,7 +114,7 @@ export async function POST(
     // Log popup_action event
     await logEvent({
       userId: user.id,
-      eventType: "popup_action_clicked",
+      eventType: 'popup_action_clicked',
       eventData: {
         popup_id: id,
         action_type: normalizedAction,
@@ -124,11 +124,11 @@ export async function POST(
     });
 
     // Handle action-specific logic
-    if (normalizedAction === "FOLLOW_UP_NOW") {
+    if (normalizedAction === 'FOLLOW_UP_NOW') {
       const actionUrl =
-        getStringFromRecord(popup.payload, "thread_link") ||
-        getStringFromRecord(popup.action_data, "action_url") ||
-        getStringFromRecord(action_data, "action_url");
+        getStringFromRecord(popup.payload, 'thread_link') ||
+        getStringFromRecord(popup.action_data, 'action_url') ||
+        getStringFromRecord(action_data, 'action_url');
 
       return NextResponse.json({
         success: true,
@@ -138,25 +138,25 @@ export async function POST(
     }
 
     if (
-      (normalizedAction === "MARK_DONE" || normalizedAction === "COMPLETE") &&
+      (normalizedAction === 'MARK_DONE' || normalizedAction === 'COMPLETE') &&
       popup.reminder_id
     ) {
       // Get reminder to check for contact_id and status
       const { data: reminder } = await supabase
-        .from("reminders")
-        .select("contact_id, status")
-        .eq("id", popup.reminder_id)
+        .from('reminders')
+        .select('contact_id, status')
+        .eq('id', popup.reminder_id)
         .single();
 
       // Check if reminder is already completed (prevent duplicate updates)
       const isAlreadyCompleted =
-        reminder?.status === "sent" || reminder?.status === "completed";
+        reminder?.status === 'sent' || reminder?.status === 'completed';
 
       const now = new Date().toISOString();
 
       // Mark reminder as completed (webhook no longer does this, only user interaction does)
       if (!isAlreadyCompleted) {
-        const updateData: any = { status: "sent" };
+        const updateData: any = { status: 'completed' };
 
         // If reminder has a contact, update last_interaction_at
         if (reminder?.contact_id) {
@@ -164,34 +164,34 @@ export async function POST(
 
           // Update contact's updated_at as well
           await supabase
-            .from("contacts")
+            .from('contacts')
             .update({ updated_at: now })
-            .eq("id", reminder.contact_id);
+            .eq('id', reminder.contact_id);
         }
 
         // Set completion_context if provided in action_data
         if (action_data?.completion_context) {
           updateData.completion_context = String(
-            action_data.completion_context
+            action_data.completion_context,
           ).trim();
         }
 
         // Mark reminder as completed
         await supabase
-          .from("reminders")
+          .from('reminders')
           .update(updateData)
-          .eq("id", popup.reminder_id);
+          .eq('id', popup.reminder_id);
       }
 
       // Always log task_completed (user action)
       await logEvent({
         userId: user.id,
-        eventType: "task_completed",
+        eventType: 'task_completed',
         eventData: {
           popup_id: id,
           reminder_id: popup.reminder_id,
         },
-        source: "app",
+        source: 'app',
         reminderId: popup.reminder_id,
         useServiceClient: true,
       });
@@ -201,11 +201,11 @@ export async function POST(
       if (!isAlreadyCompleted) {
         eventResult = await logEvent({
           userId: user.id,
-          eventType: "reminder_completed",
+          eventType: 'reminder_completed',
           eventData: {
             reminder_id: popup.reminder_id,
           },
-          source: "app",
+          source: 'app',
           reminderId: popup.reminder_id,
           contactId: reminder?.contact_id || undefined,
         });
@@ -214,66 +214,63 @@ export async function POST(
       // Update streak tracking (which will create streak_incremented trigger if needed)
       // Only run if we logged a new reminder_completed event
       if (eventResult?.success && popup.reminder_id) {
-        const { updateStreakOnCompletion } = await import(
-          "@/lib/streak-tracking"
-        );
+        const { updateStreakOnCompletion } =
+          await import('@/lib/streak-tracking');
         await updateStreakOnCompletion(user.id, popup.reminder_id);
 
         // Also process the reminder_completed event for any other triggers
-        const { processEventForTriggers } = await import(
-          "@/lib/trigger-manager"
-        );
+        const { processEventForTriggers } =
+          await import('@/lib/trigger-manager');
         await processEventForTriggers(
           user.id,
-          "reminder_completed",
+          'reminder_completed',
           eventResult.eventId!,
-          { reminder_id: popup.reminder_id }
+          { reminder_id: popup.reminder_id },
         );
 
         // Check if auto-create follow-up is enabled
-        const { getUserPreferences } = await import("@/lib/user-preferences");
+        const { getUserPreferences } = await import('@/lib/user-preferences');
         const userPrefs = await getUserPreferences(user.id);
 
         if (userPrefs.auto_create_followup && reminder?.contact_id) {
           // Create follow-up prompt popup
-          const { getDefaultFollowupDate } = await import(
-            "@/lib/followup-creation"
-          );
+          const { getDefaultFollowupDate } =
+            await import('@/lib/followup-creation');
           const { data: profile } = await supabase
-            .from("profiles")
-            .select("timezone")
-            .eq("id", user.id)
+            .from('profiles')
+            .select('timezone')
+            .eq('id', user.id)
             .single();
 
-          const timezone = profile?.timezone || "UTC";
+          const timezone = profile?.timezone || 'UTC';
           const followupDate = await getDefaultFollowupDate(
             user.id,
             new Date(),
-            timezone
+            timezone,
           );
 
           // Log follow_up_required event when follow-up is needed
           await logEvent({
             userId: user.id,
-            eventType: "follow_up_required",
+            eventType: 'follow_up_required',
             eventData: {
               reminder_id: popup.reminder_id,
               contact_id: reminder.contact_id,
               suggested_date: followupDate.toISOString(),
             },
-            source: "app",
+            source: 'app',
             reminderId: popup.reminder_id,
             contactId: reminder.contact_id,
           });
 
-          const { createPopup } = await import("@/lib/popup-trigger");
+          const { createPopup } = await import('@/lib/popup-trigger');
           await createPopup({
             userId: user.id,
-            templateType: "follow_up_required", // Use existing template type
-            title: "Create Next Follow-up?",
+            templateType: 'follow_up_required', // Use existing template type
+            title: 'Create Next Follow-up?',
             message: `Would you like to schedule a follow-up for ${followupDate.toLocaleDateString()}?`,
             affirmation:
-              "Staying consistent with follow-ups builds stronger relationships.",
+              'Staying consistent with follow-ups builds stronger relationships.',
             priority: 6,
             reminderId: popup.reminder_id,
             actionData: {
@@ -284,58 +281,58 @@ export async function POST(
           });
         }
       }
-    } else if (normalizedAction === "SNOOZE" && popup.reminder_id) {
+    } else if (normalizedAction === 'SNOOZE' && popup.reminder_id) {
       // Check if reminder is already sent/completed - don't allow snoozing
       const { data: reminder } = await supabase
-        .from("reminders")
-        .select("status")
-        .eq("id", popup.reminder_id)
-        .eq("user_id", user.id)
+        .from('reminders')
+        .select('status')
+        .eq('id', popup.reminder_id)
+        .eq('user_id', user.id)
         .single();
 
-      if (reminder?.status === "sent" || reminder?.status === "completed") {
+      if (reminder?.status === 'sent' || reminder?.status === 'completed') {
         return NextResponse.json(
-          { error: "Cannot snooze a reminder that has already been sent" },
-          { status: 400 }
+          { error: 'Cannot snooze a reminder that has already been sent' },
+          { status: 400 },
         );
       }
 
       const minutes =
-        typeof action_data?.minutes === "number" ? action_data.minutes : 60;
+        typeof action_data?.minutes === 'number' ? action_data.minutes : 60;
       const scheduledTime =
-        typeof action_data?.scheduled_time === "string"
+        typeof action_data?.scheduled_time === 'string'
           ? action_data.scheduled_time
           : undefined;
       const candidateType =
-        typeof action_data?.candidate_type === "string"
+        typeof action_data?.candidate_type === 'string'
           ? action_data.candidate_type
           : undefined;
       const wasRecommended =
-        typeof action_data?.was_recommended === "boolean"
+        typeof action_data?.was_recommended === 'boolean'
           ? action_data.was_recommended
           : false;
 
       const computedSnoozeUntil =
         scheduledTime ||
-        (typeof snooze_until === "string"
+        (typeof snooze_until === 'string'
           ? snooze_until
           : new Date(Date.now() + minutes * 60 * 1000).toISOString());
 
       // Persist snooze on popup instance
       await supabase
-        .from("popups")
+        .from('popups')
         .update({ snooze_until: computedSnoozeUntil })
-        .eq("id", id)
-        .eq("user_id", user.id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       // Trigger snooze API for reminder scheduling
       const snoozeResponse = await fetch(
         `${
-          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+          process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
         }/api/reminders/${popup.reminder_id}/snooze`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             minutes: scheduledTime ? undefined : minutes,
             scheduled_time: scheduledTime,
@@ -343,50 +340,51 @@ export async function POST(
             was_recommended: wasRecommended,
             is_smart_suggestion: candidateType !== undefined,
           }),
-        }
+        },
       );
 
       if (!snoozeResponse.ok) {
         const errorData = await snoozeResponse.json().catch(() => ({}));
-        console.error("Failed to snooze reminder:", {
+        console.error('Failed to snooze reminder:', {
           reminderId: popup.reminder_id,
           status: snoozeResponse.status,
-          error: errorData.error || "Unknown error",
+          error: errorData.error || 'Unknown error',
         });
         throw new Error(
-          errorData.error || `Failed to snooze reminder: ${snoozeResponse.statusText}`
+          errorData.error ||
+            `Failed to snooze reminder: ${snoozeResponse.statusText}`,
         );
       }
 
       const snoozeResult = await snoozeResponse.json().catch(() => ({}));
       if (!snoozeResult.reminder) {
-        console.error("Snooze response missing reminder data:", snoozeResult);
-        throw new Error("Snooze succeeded but reminder data is missing");
+        console.error('Snooze response missing reminder data:', snoozeResult);
+        throw new Error('Snooze succeeded but reminder data is missing');
       }
 
       await logEvent({
         userId: user.id,
-        eventType: "popup_snoozed",
+        eventType: 'popup_snoozed',
         eventData: {
           popup_id: id,
           snooze_until: computedSnoozeUntil,
           minutes,
           reminder_id: popup.reminder_id,
         },
-        source: "app",
+        source: 'app',
         reminderId: popup.reminder_id,
         useServiceClient: true,
       });
 
       await logEvent({
         userId: user.id,
-        eventType: "reminder_scheduled",
+        eventType: 'reminder_scheduled',
         eventData: {
           reminder_id: popup.reminder_id,
           snooze_until: computedSnoozeUntil,
           minutes,
         },
-        source: "app",
+        source: 'app',
         reminderId: popup.reminder_id,
         useServiceClient: true,
       });
@@ -397,9 +395,9 @@ export async function POST(
       popup: updatedPopup,
     });
   } catch (error: unknown) {
-    console.error("Failed to handle popup action:", error);
+    console.error('Failed to handle popup action:', error);
     const message =
-      error instanceof Error ? error.message : "Failed to handle popup action";
+      error instanceof Error ? error.message : 'Failed to handle popup action';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
