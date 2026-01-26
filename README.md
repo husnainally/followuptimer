@@ -16,6 +16,7 @@ A smart reminder application with motivational affirmations, built with Next.js,
 - 🎨 **Modern UI** - Clean, responsive interface with Tailwind CSS
 - 🌙 **Dark Mode** - Full dark mode support
 
+
 ## 🚀 Quick Start
 
 ### Prerequisites
